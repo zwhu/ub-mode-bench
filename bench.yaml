@@ -1,0 +1,38 @@
+# Global bench config. Override via `BENCH_CONFIG=path/to/other.yaml`.
+run:
+  default_seeds: 3
+  task_timeout_sec: 1800
+  parallelism: 2
+  network: none           # sandbox default; evaluator container has network only for pulling images
+
+agent:
+  # The runner picks one of these based on $BENCH_AGENT.
+  # All adapters implement runners/agent/<name>.ts
+  default: trae
+  adapters:
+    trae:
+      cmd: ["traecli", "--non-interactive"]
+      skill_mount: /sandbox/.trae/skills
+    claude:
+      cmd: ["claude", "--no-stream"]
+      skill_mount: /sandbox/.claude/skills
+    grok:
+      cmd: ["grok", "run"]
+      skill_mount: /sandbox/.grok/skills
+
+sandbox:
+  image: ub-mode-bench/sandbox:latest
+  cpus: 2
+  memory_mb: 4096
+  tmp_mb: 2048
+  pids: 512
+
+gates:
+  image: ub-mode-bench/gates:latest
+  crap_max: 10
+  dup_threshold: 0.8
+  mutation_survivor_max: 0
+
+reporting:
+  out_dir: reports
+  formats: [csv, html, json]

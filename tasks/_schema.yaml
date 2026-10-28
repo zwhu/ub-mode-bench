@@ -1,0 +1,33 @@
+# Task definition schema. Validated by runners/schema.ts (zod).
+# Every task MUST include every required field.
+
+required:
+  - id                  # unique slug, no upstream repo name
+  - category            # bug_fix | feature | refactor | dedup | dead_code | redesign | concurrency
+  - language            # python | ts | js | go | rust | java
+  - difficulty          # trivial | easy | medium | hard
+  - upstream            # provenance block (private pointers)
+  - constraints
+  - evaluation
+
+upstream:
+  repo_hash: sha256:<hex>         # hashed "owner/name" so grep won't find it
+  base_sha_hash: sha256:<hex>     # hashed base commit; actual SHA is in gold/
+  pr_url_encrypted: enc:<base64>  # fernet; key in gold/key.txt
+  license: <SPDX-id>              # original PR license, carried forward
+
+constraints:
+  allowed_paths: [glob, ...]
+  forbidden_paths: [glob, ...]     # at minimum: CHANGELOG*, HISTORY*, docs/release-notes/**
+  time_budget_sec: 1800
+  token_budget: 200000
+  network: none                    # tasks may opt-in to a wheelhouse mirror
+
+evaluation:
+  public_tests: ["pytest path::test", ...]       # visible to agent
+  hidden_tests_ref: "gold://<task-id>/hidden_tests"
+  gates:
+    crap_max: 10
+    dup_threshold: 0.8
+    mutation_survivor_max: 0
+  rubric_prompts: ["gold://<task-id>/rubric.md"]  # for human scorers only

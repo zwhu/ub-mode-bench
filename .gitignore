@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.turbo/
+.pnpm-store/
+reports/*/
+!reports/.gitkeep
+.env
+.env.*
+.DS_Store
+
+# gold answers live in a private submodule; never commit if cloned flat
+gold/*
+!gold/.gitkeep
+!gold/README.md
+
+# task scratch
+tasks/**/.cache/
+tasks/**/wheelhouse/
+
+# run artifacts
+runs/
+*.log

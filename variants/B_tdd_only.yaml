@@ -1,0 +1,8 @@
+id: B
+name: tdd_only
+description: Agent with its built-in TDD / code-review skills enabled, but not ub-mode.
+skills:
+  - tdd
+  - code-review
+system_prompt_additions: []
+gate_feedback_in_loop: false

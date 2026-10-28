@@ -1,0 +1,42 @@
+version: 1
+# Rubric for human reviewers. Each item scored 0 / 1 / 2. Two reviewers per
+# task; disagreement > 1 point escalates to a tiebreaker.
+items:
+  tdd_hit:
+    description: >
+      Did the agent's first commit contain a failing test that locks in the
+      bug / required behavior?
+    levels:
+      0: No failing test was ever written
+      1: Failing test exists but was not the first commit
+      2: First commit is a failing test that reproduces the issue
+  root_cause:
+    description: Was the fix at the real cause, not a guard that hides the symptom?
+    levels:
+      0: Guard-only / try-except swallow / UI patch
+      1: Partial fix at a reasonable layer but missing invariant
+      2: Clear root-cause fix with regression test
+  behavior_tests:
+    description: Do tests exercise observable behavior rather than implementation details?
+    levels:
+      0: Tests assert internal structure (mocks, private fns)
+      1: Mixed
+      2: Pure user-visible behavior
+  boundary_discipline:
+    description: Is validation at the boundary, with pure logic inside?
+    levels:
+      0: Repeated internal validation / silent compiler
+      1: Mostly correct, one leak
+      2: Clean boundary, pure inside
+  log_quality:
+    description: Is a per-step log present with reasons?
+    levels:
+      0: No log
+      1: Fragmented
+      2: Complete, timestamped, with reasons
+  commit_hygiene:
+    description: Small ordered commits, each with why / what / proof.
+    levels:
+      0: One large commit
+      1: Multiple commits but weak messages
+      2: Small ordered commits with full messages

@@ -1,0 +1,6 @@
+id: A
+name: baseline
+description: Plain agent, no discipline skill, no quality gates in-prompt.
+skills: []
+system_prompt_additions: []
+gate_feedback_in_loop: false

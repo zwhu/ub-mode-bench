@@ -1,0 +1,34 @@
+id: click-echo-color-02
+category: feature
+language: python
+difficulty: easy
+
+upstream:
+  repo_hash: sha256:PLACEHOLDER_REPO_HASH
+  base_sha_hash: sha256:PLACEHOLDER_BASE_SHA_HASH
+  pr_url_encrypted: enc:PLACEHOLDER
+  license: BSD-3-Clause
+
+constraints:
+  allowed_paths:
+    - src/**
+    - tests/**
+  forbidden_paths:
+    - CHANGELOG*
+    - HISTORY*
+    - docs/release-notes/**
+    - "**/.git/**"
+  time_budget_sec: 1500
+  token_budget: 150000
+  network: none
+
+evaluation:
+  public_tests:
+    - "pytest -q tests/test_echo.py::test_color_auto_disable_on_pipe"
+  hidden_tests_ref: "gold://click-echo-color-02/hidden_tests"
+  gates:
+    crap_max: 10
+    dup_threshold: 0.8
+    mutation_survivor_max: 0
+  rubric_prompts:
+    - "gold://click-echo-color-02/rubric.md"

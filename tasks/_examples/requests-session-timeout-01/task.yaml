@@ -1,0 +1,36 @@
+id: requests-session-timeout-01
+category: bug_fix
+language: python
+difficulty: easy
+
+upstream:
+  # NOTE: do not expose the upstream slug or SHA here.
+  # Values below are hashed; real values live in gold/<task>/provenance.yaml.
+  repo_hash: sha256:PLACEHOLDER_REPO_HASH
+  base_sha_hash: sha256:PLACEHOLDER_BASE_SHA_HASH
+  pr_url_encrypted: enc:PLACEHOLDER
+  license: Apache-2.0
+
+constraints:
+  allowed_paths:
+    - src/**
+    - tests/**
+  forbidden_paths:
+    - CHANGELOG*
+    - HISTORY*
+    - docs/release-notes/**
+    - "**/.git/**"
+  time_budget_sec: 1500
+  token_budget: 150000
+  network: none
+
+evaluation:
+  public_tests:
+    - "pytest -q tests/test_session.py::test_timeout_is_respected"
+  hidden_tests_ref: "gold://requests-session-timeout-01/hidden_tests"
+  gates:
+    crap_max: 10
+    dup_threshold: 0.8
+    mutation_survivor_max: 0
+  rubric_prompts:
+    - "gold://requests-session-timeout-01/rubric.md"

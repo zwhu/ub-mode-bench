@@ -1,0 +1,50 @@
+name: smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm lint
+
+  schema:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile=false
+      - name: Validate every task.yaml and variant.yaml
+        run: |
+          npx tsx -e "
+          import { loadTask, loadVariant } from './runners/config.ts';
+          import { readdirSync } from 'node:fs';
+          import { join } from 'node:path';
+          for (const d of readdirSync('tasks/_examples')) {
+            loadTask(join('tasks/_examples', d, 'task.yaml'));
+            console.log('ok task', d);
+          }
+          for (const f of readdirSync('variants')) {
+            loadVariant(join('variants', f));
+            console.log('ok variant', f);
+          }
+          "

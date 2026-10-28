@@ -1,0 +1,9 @@
+id: D
+name: ub_mode_no_tools
+description: Ablation. ub-mode rules in prompt but crapper/dryer/mutator unavailable.
+skills:
+  - ub-mode
+tools_available: []
+system_prompt_additions:
+  - "/ub-mode"
+gate_feedback_in_loop: false

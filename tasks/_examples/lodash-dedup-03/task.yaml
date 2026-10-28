@@ -1,0 +1,33 @@
+id: lodash-dedup-03
+category: dedup
+language: js
+difficulty: medium
+
+upstream:
+  repo_hash: sha256:PLACEHOLDER_REPO_HASH
+  base_sha_hash: sha256:PLACEHOLDER_BASE_SHA_HASH
+  pr_url_encrypted: enc:PLACEHOLDER
+  license: MIT
+
+constraints:
+  allowed_paths:
+    - src/**
+    - test/**
+  forbidden_paths:
+    - CHANGELOG*
+    - HISTORY*
+    - "**/.git/**"
+  time_budget_sec: 1800
+  token_budget: 180000
+  network: none
+
+evaluation:
+  public_tests:
+    - "node --test test/dedup.test.js"
+  hidden_tests_ref: "gold://lodash-dedup-03/hidden_tests"
+  gates:
+    crap_max: 10
+    dup_threshold: 0.8      # harness fails if any pair of blocks exceeds 0.8
+    mutation_survivor_max: 0
+  rubric_prompts:
+    - "gold://lodash-dedup-03/rubric.md"

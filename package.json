@@ -1,0 +1,33 @@
+{
+  "name": "ub-mode-bench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent benchmark for agent discipline skills (ub-mode and peers)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "bench:smoke": "tsx runners/cli.ts run --tasks requests-session-timeout-01 --variants A,C --seeds 1",
+    "bench:run": "tsx runners/cli.ts run",
+    "task:new": "tsx scripts/new_task.ts",
+    "task:rewrite": "tsx scripts/rewrite_pr.ts",
+    "report": "tsx score/aggregate.ts"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "execa": "^9.4.0",
+    "p-limit": "^6.1.0",
+    "yaml": "^2.5.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
