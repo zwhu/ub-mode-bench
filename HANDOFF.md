@@ -28,7 +28,7 @@ GPT 和 DeepSeek 在 traecli 里走的 harness 不同，系统提示词和工具
 - UNC18结果哈希保持原样；原DeepSeek C3 mutation null及原因保留，其他正式指标非null。所有模型/任务/seed原始值、均值、n及C−A已独立核对。
 - 正式回放 PID3563951/session54969 已终态（exit0）；所有旧formal/smoke进程亦终态，禁止重启。54项原始artifact audit通过，最终lint/9测试通过，宿主登录检查通过。
 - benchmark容器0、auth symlink0，`ubm-internal`空网络已删除；12个镜像标签及gold/raw/quarantine/wheel/parser/source缓存保留，清单在早报及 `reports/overnight/cleanup.json`。
-- S6 `IN_PROGRESS`：早报已写最终数据与限制，分支 `overnight-2026-10-29` 尚待提交/推送；基线main@f74f71f。
+- S6 `PASS_CANDIDATE`：最终早报与代码已推到 `overnight-2026-10-29`；代码/结果提交 `1fec887eefbaad55ebf01424f262a68be85bab09`，远端SHA核对一致，main仍为f74f71f。其后的收口文档提交同步本次状态。作者/message已核对，没有Co-authored-by。
 - LIMITED：PR merge时间未独立核验；一项mutation因30分钟剩余预算/20分钟cap为null。没有BLOCKED项。
 - UTC 2026-10-29T01:31:19.233195+00:00。
 

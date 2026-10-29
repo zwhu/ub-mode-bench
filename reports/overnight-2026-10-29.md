@@ -1,6 +1,6 @@
 # ub-mode 夜间评测早报 · 2026-10-29
 
-当前状态：PASS_CANDIDATE。S1–S5 已验收；干净 smoke 6/6、正式 54/54 均有效。S6 的容器/网络清理与宿主登录检查已完成，分支推送正在收口。
+当前状态：PASS_CANDIDATE。S1–S6 已验收；干净 smoke 6/6、正式 54/54 均有效。报告、代码交付与容器/网络清理已完成；下述LIMITED项保留，最终PASS由用户审核。
 
 ## 本轮观察
 
@@ -239,7 +239,9 @@ LIMITED：三个PR的merge时间仍未独立核验（公开页/REST受访问限�
 
 ## 分支与清理
 
-交付分支：`overnight-2026-10-29`，目标远端 `git@github.com:zwhu/ub-mode-bench.git`；当前准备提交并推送，推送结果在完成后补记。
+交付分支：[overnight-2026-10-29](https://github.com/zwhu/ub-mode-bench/tree/overnight-2026-10-29) 已推送到 `git@github.com:zwhu/ub-mode-bench.git`。代码与结果提交 `1fec887eefbaad55ebf01424f262a68be85bab09`，作者/committer 均为 zwhu <331946763@qq.com>，message为“Add isolated ub-mode benchmark and corrected overnight results”，没有Co-authored-by。UTC 2026-10-29T01:46:07.939425+00:00 远端branch SHA与本地提交一致；main仍为 `f74f71f`。本次收口记录作为其后的文档提交更新。
+
+推送时旧转发SSH agent在请求身份列表时阻塞；使用同一用户拥有且可响应的现有agent与个人GitHub key恢复，GitHub官方SSH443通道沿用已知主机密钥严格校验。该覆盖仅作用于本次命令，未改全局配置。证据 `reports/overnight/code-push.log` 和 `reports/overnight/code-remote-after-submit.txt`。
 
 UTC 2026-10-29T01:30:07.471148+00:00 已确认benchmark容器为0、运行时auth symlink为0，空的 `ubm-internal` 网络已删除；没有保留运行容器或benchmark网络。证据 `reports/overnight/cleanup.json`。
 
