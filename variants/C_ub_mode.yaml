@@ -1,6 +1,6 @@
 id: C
 name: ub_mode
-description: Agent with ub-mode skill and the four companion quality-gate tools available.
+description: Agent with ub-mode skill and three companion quality-gate tools available.
 skills:
   - ub-mode
 tools_available:

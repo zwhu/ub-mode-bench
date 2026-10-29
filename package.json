@@ -11,11 +11,13 @@
   },
   "scripts": {
     "lint": "tsc --noEmit",
-    "bench:smoke": "tsx runners/cli.ts run --tasks requests-session-timeout-01 --variants A,C --seeds 1",
+    "bench:smoke": "tsx runners/cli.ts run --tasks url-base-slashes --variants A,C --seeds 1 --phase smoke",
     "bench:run": "tsx runners/cli.ts run",
     "task:new": "tsx scripts/new_task.ts",
     "task:rewrite": "tsx scripts/rewrite_pr.ts",
-    "report": "tsx score/aggregate.ts"
+    "task:validate": "tsx scripts/validate_task.ts",
+    "report": "tsx score/aggregate.ts",
+    "test": "tsx --test runners/*.test.ts"
   },
   "dependencies": {
     "chalk": "^5.3.0",

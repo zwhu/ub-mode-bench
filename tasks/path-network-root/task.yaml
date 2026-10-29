@@ -1,0 +1,39 @@
+{
+  "id": "path-network-root",
+  "category": "bug_fix",
+  "language": "ts",
+  "difficulty": "easy",
+  "upstream": {
+    "repo_hash": "sha256:394278529f0a37a44375372fe2802f5faa8da110e73d7bdb0cebb3c9c3fa46fc",
+    "base_sha_hash": "sha256:f829f3715832158c2511a1264178ccede41c3e80970bfc653f6caecc7798c300",
+    "pr_url_encrypted": "enc:local-gold-only",
+    "license": "MIT"
+  },
+  "constraints": {
+    "allowed_paths": [
+      "src/**",
+      "test/**"
+    ],
+    "forbidden_paths": [],
+    "time_budget_sec": 1800,
+    "token_budget": 1000000,
+    "network": "none"
+  },
+  "evaluation": {
+    "public_tests": [
+      "node_modules/.bin/vitest run"
+    ],
+    "hidden_tests_ref": "gold://path-network-root/hidden_tests",
+    "gates": {
+      "crap_max": 10,
+      "dup_threshold": 0.8,
+      "mutation_survivor_max": 0
+    }
+  },
+  "image": "ub-mode-bench/path-network-root:2026-10-29",
+  "hidden_command": "node_modules/.bin/vitest run test/index.spec.ts",
+  "coverage_command": "node_modules/.bin/vitest run --coverage --coverage.reporter=lcov",
+  "dependency_baselines": {
+    "pathe": "2.0.3"
+  }
+}

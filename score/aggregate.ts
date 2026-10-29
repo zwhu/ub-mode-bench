@@ -1,132 +1,31 @@
-import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { readdir, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Command } from "commander";
-
-interface Metrics {
-  public_tests_passed: boolean;
-  hidden_tests_passed: boolean | null;
-  crap_max: number | null;
-  crap_mean: number | null;
-  dup_pairs_over_threshold: number | null;
-  mutation_survivors: number | null;
-  diff_lines: number;
-  commits: number;
-  wallclock_ms: number;
-  exit_code: number;
+import { completedResult, type Result, type Metrics } from "../runners/result.ts";
+export const METRICS: (keyof Metrics)[]=["public_tests_passed","hidden_tests_passed","crap_max","crap_mean","dup_pairs_over_threshold","mutation_survivors","diff_lines","commits","first_commit_is_failing_test","wallclock_ms"];
+export function aggregate(rows:Result[]) {
+  return [...new Set(rows.map(r=>r.model))].map(model=>({model,metrics:Object.fromEntries(METRICS.map(metric=>{
+    const group=(variant:"A"|"C")=>{
+      const values=rows.filter(r=>r.valid&&r.model===model&&r.variant===variant&&r.metrics[metric]!==null)
+        .map(r=>({task:r.task,seed:r.seed,value:Number(r.metrics[metric])}));
+      return {mean:values.length?values.reduce((s,x)=>s+x.value,0)/values.length:null,n:values.length,values};
+    };
+    const A=group("A"),C=group("C");
+    return [metric,{A,C,delta:C.mean!==null&&A.mean!==null?C.mean-A.mean:null}];
+  }))}));
 }
-
-interface Row {
-  task: string;
-  variant: string;
-  seed: number;
-  m: Metrics;
-}
-
-const program = new Command();
-program
-  .option("--run <id>", "run id (defaults to latest)", "")
-  .option("--out <dir>", "report output dir", "")
-  .action(async (opts) => {
-    const base = "reports";
-    const runs = (await readdir(base, { withFileTypes: true }))
-      .filter((d) => d.isDirectory() && d.name !== ".gitkeep")
-      .map((d) => d.name)
-      .sort();
-    const runId = opts.run || runs.at(-1);
-    if (!runId) throw new Error("no runs found");
-    const runDir = join(base, runId);
-    const rows = await collectRows(runDir);
-    const out = opts.out || runDir;
-    await mkdir(out, { recursive: true });
-    await writeFile(join(out, "metrics.csv"), toCsv(rows));
-    await writeFile(join(out, "metrics.json"), JSON.stringify(rows, null, 2));
-    await writeFile(join(out, "index.html"), renderHtml(runId, rows));
-    console.log(`report: ${join(out, "index.html")}`);
-  });
-
-async function collectRows(runDir: string): Promise<Row[]> {
-  const rows: Row[] = [];
-  if (!existsSync(runDir)) return rows;
-  for (const task of await readdir(runDir)) {
-    const tDir = join(runDir, task);
-    for (const variant of await readdir(tDir)) {
-      const vDir = join(tDir, variant);
-      for (const seed of await readdir(vDir)) {
-        const metricsPath = join(vDir, seed, "metrics.json");
-        if (!existsSync(metricsPath)) continue;
-        const m: Metrics = JSON.parse(await readFile(metricsPath, "utf8"));
-        rows.push({ task, variant, seed: Number(seed), m });
-      }
-    }
-  }
+export async function collectRows(root:string){
+  const rows:Result[]=[];
+  for(const file of await readdir(root,{withFileTypes:true})){if(!file.isDirectory())continue;
+    const r=await completedResult(join(root,file.name,"result.json"));if(r)rows.push(r);}
   return rows;
 }
-
-function toCsv(rows: Row[]): string {
-  const header = [
-    "task",
-    "variant",
-    "seed",
-    "public_tests_passed",
-    "hidden_tests_passed",
-    "crap_max",
-    "crap_mean",
-    "dup_pairs",
-    "mutation_survivors",
-    "diff_lines",
-    "commits",
-    "wallclock_ms",
-    "exit_code",
-  ].join(",");
-  const body = rows
-    .map((r) =>
-      [
-        r.task,
-        r.variant,
-        r.seed,
-        r.m.public_tests_passed,
-        r.m.hidden_tests_passed,
-        r.m.crap_max,
-        r.m.crap_mean,
-        r.m.dup_pairs_over_threshold,
-        r.m.mutation_survivors,
-        r.m.diff_lines,
-        r.m.commits,
-        r.m.wallclock_ms,
-        r.m.exit_code,
-      ].join(","),
-    )
-    .join("\n");
-  return `${header}\n${body}\n`;
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+  const p=new Command();p.option("--run <phase>","run phase","formal").option("--out <path>","output")
+    .action(async o=>{o.out??=`reports/overnight/${o.run}`;const rows=await collectRows(join("runs",o.run));await mkdir(o.out,{recursive:true});
+      await writeFile(join(o.out,"aggregate.json"),JSON.stringify({valid:rows.filter(r=>r.valid).length,total:rows.length,models:aggregate(rows),invalid:rows.filter(r=>!r.valid)},null,2));
+      const header="model,task,variant,seed,valid,"+METRICS.join(",");
+      await writeFile(join(o.out,"raw.csv"),header+"\n"+rows.map(r=>[r.model,r.task,r.variant,r.seed,r.valid,...METRICS.map(k=>r.metrics[k]??"")].join(",")).join("\n")+"\n");
+      console.log(`aggregate: ${o.out}/aggregate.json`);});await p.parseAsync(process.argv);
 }
-
-function renderHtml(runId: string, rows: Row[]): string {
-  const byTaskVariant = new Map<string, Row[]>();
-  for (const r of rows) {
-    const k = `${r.task}|${r.variant}`;
-    const list = byTaskVariant.get(k) ?? [];
-    list.push(r);
-    byTaskVariant.set(k, list);
-  }
-  const cells = [...byTaskVariant.entries()]
-    .map(([k, rs]) => {
-      const [task, variant] = k.split("|");
-      const pass = rs.filter((r) => r.m.public_tests_passed).length;
-      const avgDiff = rs.reduce((a, r) => a + r.m.diff_lines, 0) / rs.length;
-      const avgCrap =
-        rs.map((r) => r.m.crap_max).filter((n): n is number => n !== null).reduce((a, n) => a + n, 0) /
-          Math.max(1, rs.length);
-      return `<tr><td>${task}</td><td>${variant}</td><td>${pass}/${rs.length}</td><td>${avgDiff.toFixed(1)}</td><td>${avgCrap.toFixed(1)}</td></tr>`;
-    })
-    .join("");
-  return `<!doctype html><meta charset="utf-8"><title>ub-mode-bench ${runId}</title>
-<style>body{font:14px/1.5 ui-monospace,monospace;padding:24px;color:#2a2a2a}
-table{border-collapse:collapse;margin-top:12px}th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}
-th{background:#f6f6f6}h1{font-size:18px}</style>
-<h1>ub-mode-bench · ${runId}</h1>
-<table><thead><tr><th>task</th><th>variant</th><th>pass rate</th><th>avg diff lines</th><th>avg CRAP max</th></tr></thead>
-<tbody>${cells}</tbody></table>`;
-}
-
-program.parseAsync(process.argv);

@@ -1,0 +1,40 @@
+{
+  "id": "defaults-safe-copy",
+  "category": "bug_fix",
+  "language": "ts",
+  "difficulty": "easy",
+  "upstream": {
+    "repo_hash": "sha256:153fddd051933d8b4c029dc35e403141a80221946fa5ee85a164668403f10646",
+    "base_sha_hash": "sha256:ec1ddd48dfdbf644c8ed652fbf9c4fc4b2556b00a1d39a2d87d91b089b3b6f36",
+    "pr_url_encrypted": "enc:local-gold-only",
+    "license": "MIT"
+  },
+  "constraints": {
+    "allowed_paths": [
+      "src/**",
+      "test/**"
+    ],
+    "forbidden_paths": [],
+    "time_budget_sec": 1800,
+    "token_budget": 1000000,
+    "network": "none"
+  },
+  "evaluation": {
+    "public_tests": [
+      "node_modules/.bin/vitest run"
+    ],
+    "hidden_tests_ref": "gold://defaults-safe-copy/hidden_tests",
+    "gates": {
+      "crap_max": 10,
+      "dup_threshold": 0.8,
+      "mutation_survivor_max": 0
+    }
+  },
+  "image": "ub-mode-bench/defaults-safe-copy:2026-10-29-no-reference",
+  "hidden_command": "node_modules/.bin/vitest run test/defu.test.ts",
+  "coverage_command": "node_modules/.bin/vitest run --coverage --coverage.reporter=lcov",
+  "dependency_baselines": {
+    "ufo": "1.6.3",
+    "defu": "6.1.4"
+  }
+}

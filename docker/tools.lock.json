@@ -1,0 +1,16 @@
+{
+  "ub-mode": "57a8bdd28e45ed41900ace0bafa2ff76dd9ed70f",
+  "crapper": "6fd92c4c9bcc56efb64a2f8743d5a2993bcfd42d",
+  "dryer": "66ff6d21a42c04afcad89c78a80066176d1294b0",
+  "mutator": "a5a0cb803b66e0cdb8bf471b3b08af701d424a41",
+  "tree-sitter": "0.25.2",
+  "tree-sitter-language-pack": "1.22.1",
+  "node": "22.16.0",
+  "node_sha256": "f4cb75bb036f0d0eddf6b79d9596df1aaab9ddccd6a20bf489be5abe9467e84e",
+  "tree-sitter-typescript": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+  "tree-sitter-javascript": "44c892e0be055ac465d5eeddae6d3e194424e7de",
+  "task_dependency_overrides": {
+    "ufo": "1.6.3",
+    "defu": "6.1.4"
+  }
+}

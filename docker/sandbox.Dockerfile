@@ -1,28 +1,12 @@
-# Sandbox image: everything an agent might need to drive the task.
-# No crapper/dryer/mutator here on purpose — those live in gates/ so the agent
-# cannot look at gold-sensitive tooling output while running.
-FROM debian:bookworm-slim
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    LC_ALL=C.UTF-8 \
-    PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git curl build-essential pkg-config \
-      python3 python3-pip python3-venv \
-      nodejs npm \
-      golang \
-      jq yq \
-      ripgrep \
+FROM hub.byted.org/library/debian@sha256:78d2f66e0fec9e5a39fb2c72ea5e052b548df75602b5215ed01a17171529f706
+ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git curl python3 python3-pip python3-venv ripgrep xz-utils \
     && rm -rf /var/lib/apt/lists/*
-
-# Agent CLIs: wire your actual installer here. The scripts/install_agents.sh
-# runs on image build and should install `traecli`, `claude`, or `grok` as
-# needed. For the public MVP we leave this as an injection point.
-COPY docker/sandbox/install_agents.sh /tmp/install_agents.sh
-RUN bash /tmp/install_agents.sh || echo "agents not installed in base image"
-
-# Non-root to prevent agent from clobbering host-mounted volumes.
+COPY docker/vendor/node-v22.16.0-linux-x64.tar.xz /tmp/node.tar.xz
+RUN echo 'f4cb75bb036f0d0eddf6b79d9596df1aaab9ddccd6a20bf489be5abe9467e84e  /tmp/node.tar.xz' | sha256sum -c - \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 && rm /tmp/node.tar.xz
+RUN npm install --global pnpm@11.9.0 --registry=https://registry.npmjs.org
 RUN useradd -m -u 1000 bench
-USER bench
 WORKDIR /sandbox

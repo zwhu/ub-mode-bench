@@ -1,0 +1,1 @@
+Resolving a network share path loses its UNC root and turns it into an ordinary rooted path. resolve should retain the network root for both backslash and forward-slash UNC inputs, including relative segments appended to the share. Keep normal absolute roots, drive paths, relative paths, and cwd fallback behaving as before.

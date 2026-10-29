@@ -36,6 +36,10 @@ export const TaskSchema = z.object({
     }),
     rubric_prompts: z.array(z.string().startsWith("gold://")).default([]),
   }),
+  image: z.string().optional(),
+  hidden_command: z.string().optional(),
+  coverage_command: z.string().optional(),
+  dependency_baselines: z.record(z.string().regex(/^[a-z0-9][a-z0-9._-]*$/), z.string()).optional(),
 });
 export type Task = z.infer<typeof TaskSchema>;
 

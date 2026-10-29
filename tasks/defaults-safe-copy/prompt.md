@@ -1,0 +1,1 @@
+Merging configuration defaults from JSON can give the result an attacker-controlled prototype. A JSON object with an own __proto__ property must not cause inherited values to override ordinary defaults. Fix the merge behavior while preserving precedence, nested defaults, arrays, custom mergers, and protection of Object.prototype.

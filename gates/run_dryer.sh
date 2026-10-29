@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# Returns the count of block pairs with similarity >= threshold.
 set -euo pipefail
-WORKDIR="${1:?workdir}"
-THRESHOLD="${2:?threshold}"
-IMAGE="${3:?gates image}"
-
-docker run --rm --network=none \
-  -v "$WORKDIR":/work:ro \
-  -w /work \
-  "$IMAGE" \
-  bash -lc "dryer --threshold=$THRESHOLD --count-only src/ test/ tests/ 2>/dev/null || echo 0"
+work="${1:?workdir}"
+threshold="${2:?threshold}"
+image="${3:?task gates image}"
+args=(docker run --rm --pull=never --network=none --user "$(id -u):$(id -g)" -v "$work:$work:rw" -w "$work" "$image" dryer --changed --threshold "$threshold")
+printf -v command '%q ' "${args[@]}"
+exec sg docker -c "$command"

@@ -1,0 +1,1 @@
+Removing a URL base can produce a protocol-relative destination when the remaining path starts with repeated slashes. Normalize the leading separators of a successfully removed base to a single slash. Preserve the existing behavior for unrelated paths, segment boundaries, query strings, and external URLs.

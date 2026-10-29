@@ -1,21 +1,11 @@
-# Gates image: deterministic quality-gate tooling. Lives separately from the
-# sandbox so the agent never has access to it mid-run.
-FROM debian:bookworm-slim
+FROM ub-mode-bench/sandbox:2026-10-29
+# Wheels are built from the exact upstream commits in tools.lock.json.
+COPY docker/vendor/wheels/ /tmp/wheels/
+RUN python3 -m pip install --break-system-packages --no-index --find-links=/tmp/wheels \
+    crapper==0.1.0 dryer==0.1.0 mutator==0.1.0 tree-sitter==0.25.2 tree-sitter-language-pack==1.22.1 \
+    && rm -rf /tmp/wheels
 
-ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git curl python3 python3-pip \
-      nodejs npm golang build-essential ripgrep jq \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install the Uncle Bob quality-gate tools. These are small Go/Python CLIs; if
-# unavailable at image build, individual gate scripts degrade to null results
-# instead of silently zero-filling (see runners/collect.ts).
-RUN pip install --no-cache-dir --break-system-packages \
-      "pytest>=8" "coverage>=7" \
-    && go install github.com/unclebob/crapper@latest 2>/dev/null || true \
-    && go install github.com/unclebob/dryer@latest   2>/dev/null || true \
-    && go install github.com/unclebob/mutator@latest 2>/dev/null || true
-
-ENV PATH="/root/go/bin:${PATH}"
+COPY docker/vendor/parser-libs/ /opt/parser-libs/
+ENV TREE_SITTER_LANGUAGE_PACK_LIBS_DIR=/opt/parser-libs \
+    TREE_SITTER_LANGUAGE_PACK_CACHE_DIR=/opt/parser-cache
+RUN mkdir -p /opt/parser-cache && chmod -R a+rX /opt/parser-libs /opt/parser-cache

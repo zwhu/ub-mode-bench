@@ -1,0 +1,257 @@
+# ub-mode 夜间评测早报 · 2026-10-29
+
+当前状态：PASS_CANDIDATE。S1–S5 已验收；干净 smoke 6/6、正式 54/54 均有效。S6 的容器/网络清理与宿主登录检查已完成，分支推送正在收口。
+
+## 本轮观察
+
+A/C 的公开和隐藏测试都通过：A 27/27，C 27/27，因此本轮未观察到隐藏回归通过率增益。三个模型各自的 C 组 CRAP mean 均低于 A；mutation survivor 的方向随模型而不同。C 的模型与工具阶段平均用时均增加。
+
+| 模型 | CRAP mean C−A | survivors C−A | 模型/工具阶段额外分钟 |
+| --- | ---: | ---: | ---: |
+| GPT-6.1-Sol | -0.8313 | -0.2222 | 2.23 |
+| GPT-5.6-Luna | -0.8935 | 0.3333 | 5.35 |
+| DeepSeek-V4.1-Flash | -1.2591 | -0.8333 | 6.02 |
+
+survivors 越少表示本次自动验证留下的变异更少；DeepSeek 的 C 组该项 n=8，A 组 n=9。完整均值、n 和原始值见下表。所有 A/C run 的“首 commit 为失败测试”指标均为 false；这是未观测到符合三条标准的 commit 证据，不能据此推断是否采用过未提交的测试先行编辑。
+
+本轮只有3个小型 bug fix、每任务3次重复；A 已达到100%隐藏测试通过率。上述数据仅描述本轮任务，不作为跨模型排名或显著性结论。
+
+## 选型与隔离
+
+采用宿主 TRAE CLI 0.211.1（internal）调用模型、容器内 exec-server 执行工具的方案①。只有 task 工作目录、只读 CLI 二进制和 C 的只读 ub-mode 目录进入 executor；gold 和鉴权目录未挂载。executor 使用 internal 网络、普通 uid、资源限制和无额外 capabilities，评分容器使用 --network=none。S1 原生读写和出网探针的证据在 `reports/overnight/S1-decision.md`。
+
+本机 CLI 会在干净 TRAE_HOME 之外扫描宿主原生 skills，因此每次调用都用独立配置显式禁用非预期 skill，再检查最终上下文。A 必须为空；C 必须只有 ub-mode，并具有读取完整 SKILL.md 的工具事件。memories、plugins、bundled skills、web search 和 commit attribution 均在独立配置中禁用。
+
+鉴权只有宿主可以刷新。每个 run 检查 expires_at，低于 40 分钟时串行执行最小宿主调用，让宿主刷新。已验证宿主自动刷新成功；54个正式 run 之后的最小宿主调用也成功，CLI 仍为0.211.1 internal，证据 `reports/overnight/host-final-acceptance.json`。凭证没有进入容器。
+
+## 任务与来源（待用户审核）
+
+| task | issue 方向 | 来源 PR | 修复提交时间 |
+| --- | --- | --- | --- |
+| url-base-slashes | 移除 URL base 后的重复前导斜杠导致协议相对地址 | https://github.com/unjs/ufo/pull/335 | 2026-04-29 |
+| defaults-safe-copy | JSON 默认值合并的原型污染 | https://github.com/unjs/defu/pull/156 | 2026-04-01 UTC |
+| path-network-root | resolve 丢失 UNC 网络根 | https://github.com/unjs/pathe/pull/246 | 2026-07-08 |
+
+三个仓库均为 TypeScript/Vitest，源码修复小于 150 行，许可证 MIT。 交付的 setup.sh 从已提交的 base.tar.gz 恢复 fixture，三份归档与本次评测使用目录逐文件 SHA256 一致，证据 `reports/overnight/archived-setup-parity.json`。保留原始源码和 base 可见测试；没有 AST 改名。Git 历史、CHANGELOG、.github 和 PR 标识从 agent fixture 中移除。隐藏测试由来源 PR 更新的测试文件覆盖提供，内容只存在本地 gold。本报告不展示 hidden tests 内容。
+
+| task | base 可见测试通过 | base hidden 回归失败 | 修复后可见通过 | 修复后 hidden 通过 |
+| --- | ---: | ---: | ---: | ---: |
+| url-base-slashes | 485 | 4 | 485 | 36 |
+| defaults-safe-copy | 22 | 1 | 22 | 20 |
+| path-network-root | 457 | 10 | 457 | 379 |
+
+每项均在 --network=none 下验证；UNC证据 `reports/overnight/S2-validation.json`，修正依赖后的两个任务证据 `reports/overnight/repaired-S2-validation.json`。已克隆的官方 CHANGELOG 明确链接 ufo #335 和 defu #156，补充证据 `reports/overnight/sources/git-changelog-links.json`。LIMITED：PR 网页和 REST 当前受超时/共享出口限流影响，来源依据已克隆的真实 squash commit、父提交和 source/test diff；上表是提交时间，未冒充独立验证过的 PR merge 时间。
+
+## 执行口径
+
+A 的 agent 执行器不加载 skill；C 以 `/ub-mode` 开头，加载 ub-mode，并预装 crapper/dryer/mutator。两组的外部评分均使用同一个对应任务 gates 镜像。因此 C−A 对应这套 skill 与工具组合的效果。
+
+只比较同一模型的 C−A；不对模型横向排名。
+
+| 模型 | reasoning | harness | tool mode |
+| --- | --- | --- | --- |
+| GPT-6.1-Sol | xhigh | codex | code_mode_only |
+| GPT-5.6-Luna | xhigh | codex | code_mode_only |
+| DeepSeek-V4.1-Flash | high | claudecode | deferred_code_mode |
+
+远端目录证据 `reports/overnight/effective-model-catalog.json`。GPT 和 DeepSeek 的 system prompt、工具集不同，这是实验条件差异。seed 是独立重复运行编号，CLI 没有设置 provider RNG seed 的参数。模型可能事先接触过开源代码；这次隔离验证针对运行时查找参照，并不能证明训练语料未包含这些修复。
+
+upstream 固定版本：ub-mode 57a8bdd、crapper 6fd92c4、dryer 66ff6d2、mutator a5a0cb8。Node 22.16.0 已验证官方 SHA256。grammar Python 包为 1.22.1，三种 parser 从固定源提交编译并随镜像交付，runtime 不下载 grammar。 交付时公开测试 shell helper 已去除旧 `.bench_public_tests.sh` 依赖，五个 helper 使用宿主 uid:gid，断网检查证据在 `reports/overnight/gate-helper-checks.json`；正式批次走原始 runner 直接调用路径。
+
+评分只覆盖从 benchmark base 到最终工作状态改动的文件，包含未提交和新增文件。CRAP 阈值 10、重复度阈值 0.8。外部 mutation 评分上限 20 分钟，超时/无法运行记 null 并写原因。第一个 commit 为失败测试必须同时满足只改测试、该 commit 上这些测试确实失败、最终状态中相同测试确实通过。
+
+
+CRAP 分数反映整个改动文件中的函数。URL 任务的最大值均为 23，来自 `utils.ts` 中的 `joinRelativeURL`；UNC 首个 A 的最大值约 20，来自 `_path.ts` 中的 `normalizeString`。目标函数变简单时，文件最大值可能保持原值。这里保留 HANDOFF 指定的改动文件口径，证据在各 run 的 `crapper.log` 与 `gate-metrics/crap.edn`。
+
+## 依赖参照隔离修正
+
+后续审计发现，原始镜像内的 `ufo@1.6.4` 和 `defu@6.1.7` 已含目标修复，且六个正式 run 的事件流出现直接访问发布实现。前期只检查了源码 fixture 和出网限制，漏查了这条离线参照路径。原 ufo/defu 两个任务的 36 个正式结果及 6 个 smoke 结果已隔离为无效，原始 result 和工具事件全部保留；它们不进入最终干净统计。证据 `reports/overnight/dependency-reference-audit.json` 和 `reports/overnight/reference-invalidation.json`。
+
+修复前依赖已锁定为 ufo1.6.3/defu6.1.4，版本预检和运行时负向探针均通过；两个任务重新完成断网四阶段校验，证据 `reports/overnight/repaired-S2-validation.json`。追加共享全局 Node 包目录检查，未发现 ufo/defu 包副本或对应命名实现，证据 `reports/overnight/global-node-reference-audit.json`。第三轮干净 smoke 6/6 为 PASS_CANDIDATE，原始指标审计全部匹配；两个受影响任务的36个正式slot已一次性回放完成，全部有效。每个slot只执行了一次新尝试，关闭自动基础设施重试；已核对归档原始SHA并幂等合并尝试数，均为原1+新1=2，证据 `reports/overnight/formal-replay-attempt-receipt.json` 和 `reports/overnight/smoke-replay-attempt-receipt.json`。原 UNC 镜像中的 `pathe@2.0.3` 仍返回错误的单斜杠根，不含目标修复；原 UNC 18个run全部保留，回放前后result哈希一致，证据 `reports/overnight/pathe-reference-baseline.json`。本次回放沿用相同任务、prompt、hidden tests、模型、effort与harness，执行器仍为internal网络、评分仍为network=none。
+
+## Smoke
+
+6/6 个终态，6 个有效。
+
+| 模型 | 变体 | valid | hidden | CRAP max | 重复对 | mutation survivors | 首 commit 为失败测试 |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- |
+| DeepSeek-V4.1-Flash | A | true | true | 23 | 0 | 3 | false |
+| DeepSeek-V4.1-Flash | C | true | true | 23 | 0 | 2 | false |
+| GPT-5.6-Luna | A | true | true | 23 | 0 | 3 | false |
+| GPT-5.6-Luna | C | true | true | 23 | 0 | 3 | false |
+| GPT-6.1-Sol | A | true | true | 23 | 0 | 1 | false |
+| GPT-6.1-Sol | C | true | true | 23 | 0 | 1 | false |
+
+完整 smoke 结果、skill 读取事件和网络探针在 `runs/smoke/`。验收摘要在 `reports/overnight/smoke-acceptance.json`。
+
+| 模型 | smoke 指标 | A 均值 (n) | C 均值 (n) | C−A |
+| --- | --- | ---: | ---: | ---: |
+| DeepSeek-V4.1-Flash | public_tests_passed | 1 (1) | 1 (1) | 0 |
+| DeepSeek-V4.1-Flash | hidden_tests_passed | 1 (1) | 1 (1) | 0 |
+| DeepSeek-V4.1-Flash | crap_max | 23 (1) | 23 (1) | 0 |
+| DeepSeek-V4.1-Flash | crap_mean | 3.8703 (1) | 3.8703 (1) | 0 |
+| DeepSeek-V4.1-Flash | dup_pairs_over_threshold | 0 (1) | 0 (1) | 0 |
+| DeepSeek-V4.1-Flash | mutation_survivors | 3 (1) | 2 (1) | -1 |
+| DeepSeek-V4.1-Flash | diff_lines | 13 (1) | 7 (1) | -6 |
+| DeepSeek-V4.1-Flash | commits | 0 (1) | 0 (1) | 0 |
+| DeepSeek-V4.1-Flash | first_commit_is_failing_test | 0 (1) | 0 (1) | 0 |
+| DeepSeek-V4.1-Flash | wallclock_ms | 64141.1664 (1) | 123418.3155 (1) | 59277.1491 |
+| GPT-5.6-Luna | public_tests_passed | 1 (1) | 1 (1) | 0 |
+| GPT-5.6-Luna | hidden_tests_passed | 1 (1) | 1 (1) | 0 |
+| GPT-5.6-Luna | crap_max | 23 (1) | 23 (1) | 0 |
+| GPT-5.6-Luna | crap_mean | 3.9036 (1) | 3.8703 (1) | -0.0333 |
+| GPT-5.6-Luna | dup_pairs_over_threshold | 0 (1) | 0 (1) | 0 |
+| GPT-5.6-Luna | mutation_survivors | 3 (1) | 3 (1) | 0 |
+| GPT-5.6-Luna | diff_lines | 6 (1) | 5 (1) | -1 |
+| GPT-5.6-Luna | commits | 0 (1) | 0 (1) | 0 |
+| GPT-5.6-Luna | first_commit_is_failing_test | 0 (1) | 0 (1) | 0 |
+| GPT-5.6-Luna | wallclock_ms | 58007.6806 (1) | 140905.0128 (1) | 82897.3323 |
+| GPT-6.1-Sol | public_tests_passed | 1 (1) | 1 (1) | 0 |
+| GPT-6.1-Sol | hidden_tests_passed | 1 (1) | 1 (1) | 0 |
+| GPT-6.1-Sol | crap_max | 23 (1) | 23 (1) | 0 |
+| GPT-6.1-Sol | crap_mean | 3.8703 (1) | 3.8703 (1) | 0 |
+| GPT-6.1-Sol | dup_pairs_over_threshold | 0 (1) | 0 (1) | 0 |
+| GPT-6.1-Sol | mutation_survivors | 1 (1) | 1 (1) | 0 |
+| GPT-6.1-Sol | diff_lines | 31 (1) | 29 (1) | -2 |
+| GPT-6.1-Sol | commits | 0 (1) | 0 (1) | 0 |
+| GPT-6.1-Sol | first_commit_is_failing_test | 0 (1) | 0 (1) | 0 |
+| GPT-6.1-Sol | wallclock_ms | 72150.2635 (1) | 152567.0474 (1) | 80416.7839 |
+
+smoke 每组仅一个样本；此表用于验证流程。原始向量与 CSV 在 `reports/overnight/smoke/`。
+
+## 正式结果
+
+54/54 个终态；有效 54/54。状态 PASS_CANDIDATE。
+
+每行在同一个模型内计算 C−A。布尔指标按 0/1 计算均值；n 只统计该指标的非 null 有效样本。表内数值最多显示四位小数，全精度值保留在 JSON/CSV。
+
+每个变体每模型为3个任务×3次重复，未作显著性检验。C−A 是非 null 组均值之差；当 n 不同时，不能当作完整配对差。diff、commit 数和用时描述改动量及过程成本。
+
+| 模型 | 指标 | A 均值 (n) | C 均值 (n) | C−A |
+| --- | --- | ---: | ---: | ---: |
+| DeepSeek-V4.1-Flash | public_tests_passed | 1 (9) | 1 (9) | 0 |
+| DeepSeek-V4.1-Flash | hidden_tests_passed | 1 (9) | 1 (9) | 0 |
+| DeepSeek-V4.1-Flash | crap_max | 19.7885 (9) | 17.2234 (9) | -2.5652 |
+| DeepSeek-V4.1-Flash | crap_mean | 6.2431 (9) | 4.984 (9) | -1.2591 |
+| DeepSeek-V4.1-Flash | dup_pairs_over_threshold | 0 (9) | 0 (9) | 0 |
+| DeepSeek-V4.1-Flash | mutation_survivors | 1.3333 (9) | 0.5 (8) | -0.8333 |
+| DeepSeek-V4.1-Flash | diff_lines | 33 (9) | 55 (9) | 22 |
+| DeepSeek-V4.1-Flash | commits | 0 (9) | 0 (9) | 0 |
+| DeepSeek-V4.1-Flash | first_commit_is_failing_test | 0 (9) | 0 (9) | 0 |
+| DeepSeek-V4.1-Flash | wallclock_ms | 214199.6232 (9) | 575596.0765 (9) | 361396.4533 |
+| GPT-5.6-Luna | public_tests_passed | 1 (9) | 1 (9) | 0 |
+| GPT-5.6-Luna | hidden_tests_passed | 1 (9) | 1 (9) | 0 |
+| GPT-5.6-Luna | crap_max | 19.0034 (9) | 17.6701 (9) | -1.3333 |
+| GPT-5.6-Luna | crap_mean | 5.8847 (9) | 4.9912 (9) | -0.8935 |
+| GPT-5.6-Luna | dup_pairs_over_threshold | 0 (9) | 0 (9) | 0 |
+| GPT-5.6-Luna | mutation_survivors | 0.4444 (9) | 0.7778 (9) | 0.3333 |
+| GPT-5.6-Luna | diff_lines | 9.7778 (9) | 27.3333 (9) | 17.5556 |
+| GPT-5.6-Luna | commits | 0 (9) | 0 (9) | 0 |
+| GPT-5.6-Luna | first_commit_is_failing_test | 0 (9) | 0 (9) | 0 |
+| GPT-5.6-Luna | wallclock_ms | 95662.6805 (9) | 416540.7277 (9) | 320878.0473 |
+| GPT-6.1-Sol | public_tests_passed | 1 (9) | 1 (9) | 0 |
+| GPT-6.1-Sol | hidden_tests_passed | 1 (9) | 1 (9) | 0 |
+| GPT-6.1-Sol | crap_max | 19.0023 (9) | 17.3367 (9) | -1.6655 |
+| GPT-6.1-Sol | crap_mean | 5.8888 (9) | 5.0575 (9) | -0.8313 |
+| GPT-6.1-Sol | dup_pairs_over_threshold | 0 (9) | 0 (9) | 0 |
+| GPT-6.1-Sol | mutation_survivors | 0.7778 (9) | 0.5556 (9) | -0.2222 |
+| GPT-6.1-Sol | diff_lines | 55.2222 (9) | 64.5556 (9) | 9.3333 |
+| GPT-6.1-Sol | commits | 0 (9) | 0.2222 (9) | 0.2222 |
+| GPT-6.1-Sol | first_commit_is_failing_test | 0 (9) | 0 (9) | 0 |
+| GPT-6.1-Sol | wallclock_ms | 104138.441 (9) | 238179.2748 (9) | 134040.8338 |
+
+所有 task、variant、model、seed 的原始值在 `reports/overnight/formal/raw.csv`。`reports/overnight/formal/aggregate.json` 对每项保存 A/C 均值、n 和完整的 task/seed 原始向量。
+
+`wallclock_ms` 为 executor 准备与 agent 模型/工具阶段用时，外部评分不在该指标内。mutation 另有 20 分钟上限，正式 run 的剩余 30 分钟总预算也限制外部测试和评分。
+
+<details><summary>每个正式 seed 的原始自动指标</summary>
+
+| 模型 | task | 变体 | seed | valid | public | hidden | CRAP max | CRAP mean | 重复对 | survivors | diff lines | commits | 首 commit 为失败测试 | agent ms |
+| --- | --- | --- | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | A | 1 | true | true | true | 16 | 8.5 | 0 | 3 | 45 | 0 | false | 461893.0247 |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | A | 2 | true | true | true | 19.0969 | 10.0485 | 0 | 2 | 54 | 0 | false | 375793.4522 |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | A | 3 | true | true | true | 14 | 6.3333 | 0 | 3 | 51 | 0 | false | 242889.3499 |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | C | 1 | true | true | true | 8 | 4.2 | 0 | 0 | 113 | 0 | false | 510087.2314 |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | C | 2 | true | true | true | 9 | 5.25 | 0 | 0 | 132 | 0 | false | 664257.3031 |
+| DeepSeek-V4.1-Flash | defaults-safe-copy | C | 3 | true | true | true | 9 | 5.8 | 0 | 0 | 105 | 0 | false | 458024.7796 |
+| GPT-5.6-Luna | defaults-safe-copy | A | 1 | true | true | true | 14 | 7.5 | 0 | 1 | 18 | 0 | false | 128823.0069 |
+| GPT-5.6-Luna | defaults-safe-copy | A | 2 | true | true | true | 14 | 7.5 | 0 | 1 | 10 | 0 | false | 65001.2908 |
+| GPT-5.6-Luna | defaults-safe-copy | A | 3 | true | true | true | 14 | 7.5 | 0 | 1 | 18 | 0 | false | 171116.8764 |
+| GPT-5.6-Luna | defaults-safe-copy | C | 1 | true | true | true | 7 | 4.25 | 0 | 0 | 83 | 0 | false | 267633.6169 |
+| GPT-5.6-Luna | defaults-safe-copy | C | 2 | true | true | true | 14 | 7.5 | 0 | 0 | 23 | 0 | false | 300231.3498 |
+| GPT-5.6-Luna | defaults-safe-copy | C | 3 | true | true | true | 9 | 3.1667 | 0 | 0 | 97 | 0 | false | 428847.4561 |
+| GPT-6.1-Sol | defaults-safe-copy | A | 1 | true | true | true | 14 | 7.5 | 0 | 1 | 83 | 0 | false | 96737.4618 |
+| GPT-6.1-Sol | defaults-safe-copy | A | 2 | true | true | true | 14 | 7.5 | 0 | 1 | 103 | 0 | false | 111407.6805 |
+| GPT-6.1-Sol | defaults-safe-copy | A | 3 | true | true | true | 14 | 7.5 | 0 | 1 | 102 | 0 | false | 138689.5964 |
+| GPT-6.1-Sol | defaults-safe-copy | C | 1 | true | true | true | 9 | 5.3333 | 0 | 0 | 99 | 0 | false | 215052.0612 |
+| GPT-6.1-Sol | defaults-safe-copy | C | 2 | true | true | true | 9 | 5.3333 | 0 | 0 | 146 | 0 | false | 270451.8074 |
+| GPT-6.1-Sol | defaults-safe-copy | C | 3 | true | true | true | 9 | 5.3333 | 0 | 0 | 122 | 0 | false | 216509.4705 |
+| DeepSeek-V4.1-Flash | path-network-root | A | 1 | true | true | true | 20 | 6.677 | 0 | 0 | 57 | 0 | false | 303180.0927 |
+| DeepSeek-V4.1-Flash | path-network-root | A | 2 | true | true | true | 20 | 6.5114 | 0 | 0 | 26 | 0 | false | 130920.4768 |
+| DeepSeek-V4.1-Flash | path-network-root | A | 3 | true | true | true | 20 | 6.4401 | 0 | 0 | 21 | 0 | false | 222815.6585 |
+| DeepSeek-V4.1-Flash | path-network-root | C | 1 | true | true | true | 20.0102 | 6.0101 | 0 | 0 | 41 | 0 | false | 383835.3746 |
+| DeepSeek-V4.1-Flash | path-network-root | C | 2 | true | true | true | 20 | 6.1594 | 0 | 0 | 32 | 0 | false | 607523.4301 |
+| DeepSeek-V4.1-Flash | path-network-root | C | 3 | true | true | true | 20 | 5.7588 | 0 | null | 36 | 0 | false | 1177092.428 |
+| GPT-5.6-Luna | path-network-root | A | 1 | true | true | true | 20.0102 | 6.2965 | 0 | 0 | 11 | 0 | false | 95405.5525 |
+| GPT-5.6-Luna | path-network-root | A | 2 | true | true | true | 20.0102 | 6.2965 | 0 | 0 | 8 | 0 | false | 95716.1435 |
+| GPT-5.6-Luna | path-network-root | A | 3 | true | true | true | 20.0102 | 6.2251 | 0 | 0 | 10 | 0 | false | 79539.1985 |
+| GPT-5.6-Luna | path-network-root | C | 1 | true | true | true | 20.0102 | 6.2251 | 0 | 0 | 8 | 0 | false | 569514.7191 |
+| GPT-5.6-Luna | path-network-root | C | 2 | true | true | true | 20.0102 | 5.9434 | 0 | 0 | 13 | 0 | false | 381832.5478 |
+| GPT-5.6-Luna | path-network-root | C | 3 | true | true | true | 20.0102 | 6.2251 | 0 | 0 | 8 | 0 | false | 265710.0226 |
+| GPT-6.1-Sol | path-network-root | A | 1 | true | true | true | 20.0102 | 6.2965 | 0 | 0 | 43 | 0 | false | 126976.1737 |
+| GPT-6.1-Sol | path-network-root | A | 2 | true | true | true | 20.0102 | 6.3679 | 0 | 0 | 40 | 0 | false | 134881.9704 |
+| GPT-6.1-Sol | path-network-root | A | 3 | true | true | true | 20 | 6.2243 | 0 | 0 | 37 | 0 | false | 135333.8124 |
+| GPT-6.1-Sol | path-network-root | C | 1 | true | true | true | 20.0102 | 5.8101 | 0 | 0 | 33 | 1 | false | 324557.5225 |
+| GPT-6.1-Sol | path-network-root | C | 2 | true | true | true | 20.0102 | 6.1536 | 0 | 0 | 55 | 0 | false | 325894.7033 |
+| GPT-6.1-Sol | path-network-root | C | 3 | true | true | true | 20.0102 | 5.9434 | 0 | 0 | 38 | 1 | false | 323195.7837 |
+| DeepSeek-V4.1-Flash | url-base-slashes | A | 1 | true | true | true | 23 | 3.8703 | 0 | 1 | 21 | 0 | false | 78316.4597 |
+| DeepSeek-V4.1-Flash | url-base-slashes | A | 2 | true | true | true | 23 | 3.9036 | 0 | 1 | 9 | 0 | false | 55612.7066 |
+| DeepSeek-V4.1-Flash | url-base-slashes | A | 3 | true | true | true | 23 | 3.9036 | 0 | 2 | 13 | 0 | false | 56375.3878 |
+| DeepSeek-V4.1-Flash | url-base-slashes | C | 1 | true | true | true | 23 | 3.9036 | 0 | 1 | 19 | 0 | false | 314281.0107 |
+| DeepSeek-V4.1-Flash | url-base-slashes | C | 2 | true | true | true | 23 | 3.8703 | 0 | 1 | 11 | 0 | false | 496114.9913 |
+| DeepSeek-V4.1-Flash | url-base-slashes | C | 3 | true | true | true | 23 | 3.9036 | 0 | 2 | 6 | 0 | false | 569148.1401 |
+| GPT-5.6-Luna | url-base-slashes | A | 1 | true | true | true | 23 | 3.8703 | 0 | 1 | 5 | 0 | false | 73644.4889 |
+| GPT-5.6-Luna | url-base-slashes | A | 2 | true | true | true | 23 | 3.9036 | 0 | 0 | 4 | 0 | false | 88235.468 |
+| GPT-5.6-Luna | url-base-slashes | A | 3 | true | true | true | 23 | 3.8703 | 0 | 0 | 4 | 0 | false | 63482.0988 |
+| GPT-5.6-Luna | url-base-slashes | C | 1 | true | true | true | 23 | 3.8703 | 0 | 2 | 3 | 0 | false | 642834.1729 |
+| GPT-5.6-Luna | url-base-slashes | C | 2 | true | true | true | 23 | 3.8703 | 0 | 2 | 4 | 0 | false | 708662.6123 |
+| GPT-5.6-Luna | url-base-slashes | C | 3 | true | true | true | 23 | 3.8703 | 0 | 3 | 7 | 0 | false | 183600.0521 |
+| GPT-6.1-Sol | url-base-slashes | A | 1 | true | true | true | 23 | 3.8703 | 0 | 2 | 35 | 0 | false | 69676.2532 |
+| GPT-6.1-Sol | url-base-slashes | A | 2 | true | true | true | 23 | 3.8703 | 0 | 1 | 22 | 0 | false | 66111.5915 |
+| GPT-6.1-Sol | url-base-slashes | A | 3 | true | true | true | 23 | 3.8703 | 0 | 1 | 32 | 0 | false | 57431.4294 |
+| GPT-6.1-Sol | url-base-slashes | C | 1 | true | true | true | 23 | 3.8703 | 0 | 0 | 32 | 0 | false | 154252.7981 |
+| GPT-6.1-Sol | url-base-slashes | C | 2 | true | true | true | 23 | 3.8703 | 0 | 4 | 25 | 0 | false | 186548.4273 |
+| GPT-6.1-Sol | url-base-slashes | C | 3 | true | true | true | 23 | 3.8703 | 0 | 1 | 31 | 0 | false | 127150.8992 |
+
+</details>
+
+## 诊断 run 与限制
+
+S3 的 manual-v1–v4 均属于基础设施诊断，不进入 smoke/formal 样本：分别识别 executor home 缺失、原生 skill 别名解析遗漏、stdin EOF 缺失和 executor 启动 readiness 竞态。已修复，manual-v5 的真实 A 调用完成且 visible/hidden tests 通过。后续 smoke 修复了 DeepSeek 的 skill 目录外层提示格式差异，仅替换那一个预检无效样本；第二轮曾完成6/6流程验收，后来因依赖参照泄漏统一隔离；第三轮干净6/6已重新验收。
+
+旧 grammar 0.10.0 不支持固定 upstream 的 download API。已改为兼容版本和随镜像交付的本地 parser，断网集成 fixture 得到 CRAP 1、重复度 0、mutation 2 killed/0 survived。早期 manual-v5 评分中的 null 为旧 grammar 诊断结果，不用于正式比较。
+
+## 需要重跑或审核
+
+本轮没有需要自动重跑的正式slot。用户审核任务来源和prompt，被否掉的任务按HANDOFF另行重跑。UNC DeepSeek C3 的mutation若需补测，应记录为独立补充实验，保留本轮null，不覆盖原始结果；本轮按要求保留有效UNC18，不再重跑。最终PASS只由用户给出。
+
+LIMITED：三个PR的merge时间仍未独立核验（公开页/REST受访问限制，后续公开索引也无结果），已明确使用提交时间；一项mutation因预算上限为null。没有BLOCKED项。
+
+## 分支与清理
+
+交付分支：`overnight-2026-10-29`，目标远端 `git@github.com:zwhu/ub-mode-bench.git`；当前准备提交并推送，推送结果在完成后补记。
+
+UTC 2026-10-29T01:30:07.471148+00:00 已确认benchmark容器为0、运行时auth symlink为0，空的 `ubm-internal` 网络已删除；没有保留运行容器或benchmark网络。证据 `reports/overnight/cleanup.json`。
+
+保留12个 `ub-mode-bench/*` 镜像标签、`gold/`、`runs/smoke/`、`runs/formal/`、`reports/overnight/`（含原36formal+6smoke隔离归档、原始日志、resolved locks与审计）、`docker/vendor/` wheels/parsers和 `/tmp/ubm-upstream/` 固定工具源，供用户抽查和后续复现。旧URL/default镜像标签只保留作污染对照；当前任务定义使用 `-no-reference` 与 `-no-reference-gates` 标签。gold、runs和报告证据子目录均不进入本次提交。
+
+最终source检查：`pnpm lint` 和9个测试通过；54项原始测试、EDN、mutation Total、Git diff/commit、完整skill读取、网络/mount、symlink及ignore-file核对一致，aggregate的均值/n/原始向量独立重算一致。证据 `reports/overnight/S6-lint.log`、`reports/overnight/S6-tests.log`、`reports/overnight/raw-artifact-audit.json`、`reports/overnight/formal-acceptance.json`。
+
+
+## 无效与 null 项
+
+最终canonical smoke/formal无效run：0，全部已终态。另有42个隔离归档结果：URL/default两个任务、所有3模型×A/C×seed1–3的36formal，加原URL smoke6，原因统一为镜像提供了含目标修复的发布依赖；均从本轮统计排除。原始结果及失效标记在 `reports/overnight/reference-quarantine/`，完整slot清单在 `reports/overnight/reference-invalidation.json`。
+
+- path-network-root--DeepSeek-V4.1-Flash--C--3: {"mutation_survivors":"mutation reached its 20-minute cap or the remaining 30-minute run deadline"}
+
+阶段诊断 manual-v1–v4 不属于实验样本，不与正式无效 run 混算。mutator 的正常 survivor 退出码为 3；smoke 早期解析遗漏已按原始完整 Total 日志修正，并保存修正前 result。

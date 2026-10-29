@@ -20,3 +20,5 @@ tasks/**/wheelhouse/
 # run artifacts
 runs/
 *.log
+docker/vendor/
+tasks/**/base/

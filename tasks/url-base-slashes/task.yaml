@@ -1,0 +1,40 @@
+{
+  "id": "url-base-slashes",
+  "category": "bug_fix",
+  "language": "ts",
+  "difficulty": "easy",
+  "upstream": {
+    "repo_hash": "sha256:3b5a0a97387b78aab2b26f96562c1fb179ea0d8c04bc254741d0053ea04d50ad",
+    "base_sha_hash": "sha256:795ce81ca4e6a79f52a6ed85ceba027f426a6e1c775804fac41337eb88fc56e1",
+    "pr_url_encrypted": "enc:local-gold-only",
+    "license": "MIT"
+  },
+  "constraints": {
+    "allowed_paths": [
+      "src/**",
+      "test/**"
+    ],
+    "forbidden_paths": [],
+    "time_budget_sec": 1800,
+    "token_budget": 1000000,
+    "network": "none"
+  },
+  "evaluation": {
+    "public_tests": [
+      "node_modules/.bin/vitest run"
+    ],
+    "hidden_tests_ref": "gold://url-base-slashes/hidden_tests",
+    "gates": {
+      "crap_max": 10,
+      "dup_threshold": 0.8,
+      "mutation_survivor_max": 0
+    }
+  },
+  "image": "ub-mode-bench/url-base-slashes:2026-10-29-no-reference",
+  "hidden_command": "node_modules/.bin/vitest run test/base.test.ts",
+  "coverage_command": "node_modules/.bin/vitest run --coverage --coverage.reporter=lcov",
+  "dependency_baselines": {
+    "ufo": "1.6.3",
+    "defu": "6.1.4"
+  }
+}

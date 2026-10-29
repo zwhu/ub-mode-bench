@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Returns the number of surviving mutants.
 set -euo pipefail
-WORKDIR="${1:?workdir}"
-IMAGE="${2:?gates image}"
-
-docker run --rm --network=none \
-  -v "$WORKDIR":/work:ro \
-  -w /work \
-  "$IMAGE" \
-  bash -lc 'mutator --quiet --survivors-count'
+work="${1:?workdir}"
+image="${2:?task gates image}"
+test_command="${3:?test command}"
+args=(docker run --rm --pull=never --network=none --user "$(id -u):$(id -g)" -v "$work:$work:rw" -w "$work" "$image" timeout 1200 mutator --changed --test-command "$test_command" --use-existing-coverage)
+printf -v command '%q ' "${args[@]}"
+exec sg docker -c "$command"

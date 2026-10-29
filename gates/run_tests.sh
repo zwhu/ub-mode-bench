@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# Run the public tests declared by a task inside the gates container.
-# This container has pytest, node, go, rust, java toolchains installed.
 set -euo pipefail
-WORKDIR="${1:?workdir}"
-IMAGE="${2:?gates image}"
-
-docker run --rm --network=none \
-  -v "$WORKDIR":/work:rw \
-  -w /work \
-  "$IMAGE" \
-  bash -lc 'bash /work/.bench_public_tests.sh 2>&1'
+work="${1:?workdir}"
+image="${2:?task gates image}"
+test_command="${3:-node_modules/.bin/vitest run}"
+args=(docker run --rm --pull=never --network=none --user "$(id -u):$(id -g)" -v "$work:/work:rw" -w /work "$image" bash -c "$test_command")
+printf -v command '%q ' "${args[@]}"
+exec sg docker -c "$command"
