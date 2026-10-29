@@ -1,0 +1,47 @@
+{
+  "id": "vue-template-cache",
+  "category": "bug_fix",
+  "language": "ts",
+  "difficulty": "hard",
+  "upstream": {
+    "repo_hash": "sha256:131fb5ee3995b10f298aa33d6b792e667ac4adff0e87ede701269338f1782a32",
+    "base_sha_hash": "sha256:5679759c3b19ba15805c4b202d310254c8b284a6c86de91ca32cabc1de12744e",
+    "pr_url_encrypted": "enc:local-gold-only",
+    "license": "MIT"
+  },
+  "constraints": {
+    "allowed_paths": [
+      "packages/compiler-sfc/src/**",
+      "packages/compiler-sfc/__tests__/**",
+      "ACTION_LOG.md",
+      "WORK_LOG.md"
+    ],
+    "forbidden_paths": [],
+    "time_budget_sec": 1800,
+    "token_budget": 1000000,
+    "network": "none"
+  },
+  "evaluation": {
+    "public_tests": [
+      "node_modules/.bin/vitest run --project unit packages/compiler-sfc/__tests__ --maxWorkers=2"
+    ],
+    "hidden_tests_ref": "gold://vue-template-cache/hidden_tests",
+    "gates": {
+      "crap_max": 10,
+      "dup_threshold": 0.8,
+      "mutation_survivor_max": 0
+    }
+  },
+  "image": "ub-mode-bench/vue-template-cache:2026-10-29-full-sfc",
+  "test_project": "unit",
+  "hidden_command": "node_modules/.bin/vitest run --project unit packages/compiler-sfc/__tests__ --maxWorkers=2",
+  "coverage_command": "node_modules/.bin/vitest run --project unit packages/compiler-sfc/__tests__ --maxWorkers=2 --coverage --coverage.reporter=lcov",
+  "dependency_baselines": {
+    "vue": "ABSENT",
+    "@vue/compiler-sfc": "ABSENT",
+    "@vue/compiler-core": "ABSENT",
+    "@vue/compiler-dom": "ABSENT",
+    "@vue/compiler-ssr": "ABSENT",
+    "@vue/shared": "ABSENT"
+  }
+}

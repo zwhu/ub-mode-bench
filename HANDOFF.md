@@ -23,6 +23,16 @@ GPT 和 DeepSeek 在 traecli 里走的 harness 不同，系统提示词和工具
 
 ## 2. 当前状态
 
+- 当前工作树已清理身份信息和内部环境绑定，只保留评测、审计与本地报告生成命令。
+- 历史运行证据与构建缓存保存在仓库外；使用 `BENCH_ARTIFACTS_DIR` 指定本地证据根目录。
+- CLI 使用配置中的 PATH 命令；容器需要独立二进制时通过 `BENCH_EXECUTOR_BIN` 指定。
+- 清理后类型检查、14个测试、Vue18次报告、旧54次验收及容器执行器启动检查通过。
+- 本轮代码和报告已完成收口检查；提交与推送状态以Git日志和远端分支为准。已有Git历史署名未改写，公开基础镜像尚未完整联网重建。
+
+- 运行进度：vue-formal 18/18，UTC 2026-10-29T07:50:41.880Z。
+
+
+
 - S0–S5 `PASS_CANDIDATE`；第三轮干净smoke6/6、正式54/54全部completed/valid，public+hidden54/54通过。
 - 原污染36formal+6smoke已归档，不计统计；修正ufo1.6.3/defu6.1.4后一次性36slot回放完成。smoke和formal回放尝试数均幂等合并为原1+新1=2，原始SHA核对一致。
 - UNC18结果哈希保持原样；原DeepSeek C3 mutation null及原因保留，其他正式指标非null。所有模型/任务/seed原始值、均值、n及C−A已独立核对。
@@ -239,7 +249,7 @@ docker 已安装，用户已加入 docker 组，`ubm-internal` 网络可以创�
 - 必须放宽网络或隔离才能继续：停止这条路径，标 BLOCKED。
 - 宿主登录坏了（在宿主跑最小的 traecli 调用，鉴权失败）：依赖模型的步骤标 BLOCKED，继续做不依赖模型的步骤，例如任务校验、单测、报告。
 - 同一种基础设施错误连续出现 3 次：暂停跑 run，排查原因；查不出来就标 BLOCKED。
-- `/data00` 剩余空间不到 30G：停止跑 run。
+- 结果存储所在文件系统剩余空间不到 30G：停止跑 run。
 - 以下内容一律不碰：全局 traecli 配置、宿主 `~/.trae/skills`、其他仓库。
 
 ## 8. 启动时的问题（结论已验证，证据见S1/S2/S3）
@@ -258,3 +268,72 @@ docker 已安装，用户已加入 docker 组，`ubm-internal` 网络可以创�
 3. 抽查 1–2 个 C run 的事件流，确认 ub-mode 真的在起作用。
 4. 看 C−A 结果表和无效 run 列表。
 5. 确认推送的分支名和提交作者。
+
+## 10. 后续较大任务候选（2026-10-29）
+
+用户要求改用更大仓库或较大 PR。首选 Vue core #15136，固定 base 为
+`c04a45d15498ebba0de3ceae674b88ac43cb9e76`，fix 为
+`a4440c01b96798a23bef12cb6f9ada5ffaba0d3a`；业务源码最终差异134行、4模块。
+精确快照及断网针对性验证已完成：原基线138项相关测试通过，修复后139项通过；
+同一缓存失效回归在基线上因实际导入丢失失败，修复后通过，生产源码未改写。
+
+候选调查记录为 `reports/next-round/larger-task-selection.md`，详细来源与运行证据在
+同目录。TanStack Router #8084为更大备选，其环境/回归尚未验证，标LIMITED。
+旧S0–S6及54次结果保持原状态。
+
+用户已选定Vue。新任务ID为`vue-template-cache`；仅允许compiler-sfc的源码与测试路径，
+行数分类覆盖多包src与__tests__。A无skill、C仅ub-mode，最高推理档位沿用原规则。
+新的校准命名空间`vue-calibration`：Sol A/C各一次；通过后新正式命名空间
+`vue-formal`：1任务×3模型×A/C×3次重复=18次。单run30分钟、并发2、mutation20分钟，
+基础设施至多重试一次；任务失败不重试。新结果不与原54次合并。
+
+镜像只含预装依赖，不含Vue源码或答案；基线快照去掉Git历史、changelog和.github，
+无原生agent配置。`scripts/aliases.js`改为按当前工作目录解析源码别名，确保变异worker
+读到其私有源码；生产源码仍为官方base。隐藏回归沿用已校验的公开API缓存挤出方式。
+任务与参考修复四阶段断网校验通过；coverage/crapper/dryer与mutation扫描可运行。
+结果报告只展示业务源码改动行数。
+
+校准已启动，日志`reports/vue-2026-10-29/calibration-run.log`，运行namespace
+`runs/vue-calibration/`；当前A模型已结束、隐藏回归通过，外部mutation仍在执行，C模型
+质量检查尚未结束。原校准镜像为`:2026-10-29`，公开验收为3个相关测试文件。
+不要重启已运行的pair，等待完整result.json，再用
+`pnpm exec tsx scripts/report_vue.ts vue-calibration`审计和产出校准报告。
+
+校准发现部分模型新增测试文件不在上述3文件命令内。正式条件改为整个compiler-sfc
+测试目录，原base469项、官方fix470项在宿主通过；已补齐TS6/Sass等依赖。
+正式镜像`:2026-10-29-full-sfc`与对应`-gates`单独构建，未覆盖正在使用的校准镜像。
+外部mutator显式`--max-workers 2`，prompt向A/C都给出相同CPU/内存/总时限信息，
+每run保存task/config快照和image ID。校准v1不与正式18次混算。
+
+正式启动前：完成新镜像四阶段断网`pnpm task:validate vue-template-cache`；类型检查及
+tests通过；校准完整result.json均valid、无无法解释的null。允许算法本身修复失败，
+不能因为失败而重试。完成后执行
+`pnpm exec tsx runners/cli.ts run --tasks vue-template-cache --seeds 3 --phase vue-formal`
+并将stdout/stderr写`reports/vue-2026-10-29/formal-run.log`；完成用
+`pnpm exec tsx scripts/report_vue.ts vue-formal`审计输出报告与source-only.csv。
+
+Vue 正式运行已结束，18 次结果和独立复核记录已保存。后续通过评测 CLI 执行任务、通过本地报告脚本生成报告。
+
+Sol校准2/2有效并通过公开/隐藏；A源码102行、CRAPmean11.0481、模型阶段6.78分钟、survivors27；C源码111行、CRAPmean10.4964、18.52分钟，mutation因剩余run预算为null。校准v1完整结果在runs/vue-calibration，不与formal合并。正式全SFC四阶段469/1/469/470通过，12个TS测试和3个Python交付测试通过。
+
+用户要求追踪agent规则与skill影响，已完成当前源快照、任务基线、13次正式context与
+2次校准、事件、依赖内文件、存活容器和实际cwd探针审计。官方Vue与678文件基线无
+常见agent规则；宿主技能被禁用，C仅ub-mode且实际读完整内容。依赖playwright-core
+物理带3个SKILL.md，但未进入可用目录、未见实际读取，须保留此事实及证据限制。
+
+发现Luna A2/A3/C1/C2实际spawn子agent，随后关闭，违反No delegation。原解析器漏查，
+已补检测与13项TS测试通过；原result.json不改写，scripts/report_vue.ts独立协议审计
+将这4次从有效汇总排除。子记录未完整保存，不能以no-op提示断言无影响；不自动重跑。
+最终以vue-formal/protocol-audit.json有效数为准，旧的“所有样本valid”只为原runner口径。
+审计报告reports/vue-2026-10-29/agent-instruction-audit.md，自动扫描脚本
+scripts/audit_vue_instructions.py已接入报告生成，后续全部运行会刷新目录/事件审计。
+
+审计修正（UTC 2026-10-29T06:12:06.115580+00:00）：LunaC1原始hidden失败卡在descriptor.ast.transformed内部断言，其修复clone原AST避免就地转换。去掉仅限定实现的断言后，base真实输出失败、官方fix与LunaC1输出通过，证据reports/vue-2026-10-29/behavioral-review/summary.json。保留原始result指标；最终scripts/report_vue.ts会对所有终态样本执行scripts/review_vue_behavior.py，完整SFC目录断网统一复核，CSV末列behavioral_recheck_passed及报告独立呈现。不得把原内部断言失败直接计为修复失败，模型不重跑。
+
+最新分析口径（UTC 2026-10-29T07:51:50.732258+00:00，用户明确决定）：委派不作为排除条件，LunaA2/A3/C1/C2全部保留参与整体A/C汇总；委派事件仅列观察项，不能再报14有效/4排除。18次模型运行均已终态，原始result不变；最终按18次汇总并统一行为复核。前文严格排除策略被本决定覆盖，依据reports/vue-2026-10-29/analysis-policy.json。
+
+Vue正式轮终态（UTC 2026-10-29T07:54:58.512296+00:00）：18/18完成，18有效，PASS_CANDIDATE。报告与源码CSV已生成；原60份结果SHA256核对一致。
+
+修复真实性补充核验（UTC 2026-10-29T08:10:28.604618+00:00）：只导入18份生产源码到干净base，恢复原版测试及固定配置，加入修复后生成新标识符的客户端/SSR两项回归；base469原测试通过/new2失败，参考修复471通过，18份源码均471通过。证据reports/vue-2026-10-29/source-only-replay/summary.json。独立检查避免模型改过的测试参与证明，但不能证明零其他bug/未见训练答案。mutation16null来自20分钟评分cap或30分钟剩余预算；一份仅约1.5秒评分机会，本轮不能推断稳定测试强度收益。说明已写入本地报告。
+
+详细结构化报告（UTC 2026-10-29T08:18:33.320642+00:00）：用户要求按结论/实验条件/修复证明/源码与耗时/质量及缺失/观察项/18次明细组织，已生成reports/vue-2026-10-29-detailed.md。源码不含测试；按全部18次保留委派观察；所有均值与n重算对照raw正确，附独立source-only证明与mutation缺失解释，已生成本地 Markdown 和 CSV。

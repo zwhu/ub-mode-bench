@@ -2,8 +2,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { collectRows, aggregate, METRICS } from "../score/aggregate.ts";
 import type { Result } from "../runners/result.ts";
+import { artifactRoot } from "../runners/process.ts";
+import { join } from "node:path";
 
-async function rows(phase:string):Promise<Result[]>{try{return await collectRows(`runs/${phase}`);}catch{return [];}}
+async function rows(phase:string):Promise<Result[]>{try{return await collectRows(join(artifactRoot,"runs",phase));}catch{return [];}}
 const smoke=await rows("smoke"),formal=await rows("formal");
 const path="reports/overnight-2026-10-29.md";
 let text=await readFile(path,"utf8");

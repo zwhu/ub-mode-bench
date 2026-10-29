@@ -18,7 +18,7 @@ const names = JSON.parse(process.argv[1]);
 const copies = [];
 for (const directory of fs.readdirSync(root)) {
   for (const name of names) {
-    if (!directory.startsWith(name + "@")) continue;
+    if (!directory.startsWith(name.replace("/", "+") + "@")) continue;
     const path = root + directory + "/node_modules/" + name + "/package.json";
     const metadata = JSON.parse(fs.readFileSync(path, "utf8"));
     copies.push({name, version: metadata.version});

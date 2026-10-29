@@ -12,7 +12,9 @@
   "constraints": {
     "allowed_paths": [
       "src/**",
-      "test/**"
+      "test/**",
+      "ACTION_LOG.md",
+      "WORK_LOG.md"
     ],
     "forbidden_paths": [],
     "time_budget_sec": 1800,

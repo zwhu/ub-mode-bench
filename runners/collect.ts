@@ -6,6 +6,8 @@ import type { Task } from "./schema.ts";
 import type { SandboxHandle } from "./isolate.ts";
 import type { Job } from "./matrix.ts";
 import { docker, quote, cleanEnvironment } from "./process.ts";
+import { diffStats } from "./diff.ts";
+import { fileKind, allowedPath } from "./paths.ts";
 import { parseCrap, parseDry, parseMutationResult, parseEvents, skillCatalog, firstTestProof, type TestReport, type Metrics, type Result } from "./result.ts";
 
 async function git(workdir: string, ...args: string[]) {
@@ -43,16 +45,9 @@ export async function collect(handle: SandboxHandle, task: Task, job: Job, stdou
   const final = join(out, "workspace");
   await cp(handle.workdir, final, { recursive: true, dereference: false });
   await auditLinks(final);
-  const diff = await git(final, "diff", handle.base, "--numstat");
-  const diffLines = diff.split("\n").reduce((sum, line) => {
-    const [add, del] = line.split("\t"); return sum + (Number(add) || 0) + (Number(del) || 0);
-  }, 0);
-  const trackedChanged = (await git(final, "diff", handle.base, "--name-only")).split("\n").filter(Boolean);
-  const untracked = (await git(final, "ls-files", "--others", "--exclude-standard")).split("\n").filter(Boolean);
-  let extraLines = 0;
-  for (const file of untracked) {
-    const text=await readFile(join(final,file),"utf8");extraLines+=(text.match(/\n/g)?.length??0)+(text&&!text.endsWith("\n")?1:0);
-  }
+  const { files, ...lineMetrics } = await diffStats(final, handle.base);
+  const trackedChanged = files.filter(f => !f.untracked).map(f => f.path);
+  const untracked = files.filter(f => f.untracked).map(f => f.path);
   const commits = (await git(final, "rev-list", "--reverse", `${handle.base}..HEAD`)).split("\n").filter(Boolean);
   const sequence = [];
   for (const sha of commits) sequence.push({ sha, message: await git(final, "show", "-s", "--format=%B", sha),
@@ -86,30 +81,31 @@ export async function collect(handle: SandboxHandle, task: Task, job: Job, stdou
     const cr=await tool(["crapper","--changed","--threshold","10", coverageReady?"--use-existing-coverage":"--no-coverage"],"crapper",180);
     if (cr.exitCode===0||cr.exitCode===2) {
       try {crap=parseCrap(await readFile(join(work,".metrics/crap.edn"),"utf8"));}
-      catch { if (![...trackedChanged,...untracked].some(f=>f.startsWith("src/"))) crap={max:0,mean:0}; }
+      catch { if (![...trackedChanged,...untracked].some(f=>fileKind(f)==="code")) crap={max:0,mean:0}; }
     }
     if(!crap) reasons.crap="coverage unavailable or crapper failed; see coverage.log and crapper.log";
     const dr=await tool(["dryer","--changed","--threshold","0.8"],"dryer",180);
     if(dr.exitCode===0) { try {duplication=parseDry(await readFile(join(work,".metrics/dry.edn"),"utf8"));} catch {reasons.dup_pairs_over_threshold="dryer report missing or invalid";} }
     if(duplication===null) reasons.dup_pairs_over_threshold="dryer failed; see dryer.log";
-    const mu=await tool(["mutator","--changed","--test-command",task.evaluation.public_tests.join(" && "),
+    const mu=await tool(["mutator","--changed","--max-workers","2","--test-command",task.evaluation.public_tests.join(" && "),
       coverageReady?"--use-existing-coverage":"--no-coverage"],"mutator",1200);
     mutation=parseMutationResult(mu.exitCode,mu.stdout);
     if(mutation===null) reasons.mutation_survivors=mu.exitCode===124?"mutation reached its 20-minute cap or the remaining 30-minute run deadline":reasons.mutation_survivors??"mutator failed; see mutator.log";
     await cp(join(work,".metrics"),join(out,"gate-metrics"),{recursive:true}).catch(()=>{});
     const first=sequence[0];
-    if(first && first.files.length>0 && first.files.every(f=>/^test\/.+\.(?:test|spec)\.[cm]?[jt]sx?$/.test(f))) {
+    if(first && first.files.length>0 && first.files.every(f=>fileKind(f)==="test" && /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(f))) {
       const firstDir=join(scratch,"first-commit");await mkdir(firstDir);
       const tar=await execa("git",["-C",final,"archive",first.sha],{encoding:"buffer"});
       await execa("tar",["-xf","-","-C",firstDir],{input:tar.stdout});
       await execa("ln",["-s","/opt/task/node_modules",join(firstDir,"node_modules")]);
-      const files=first.files.join(" ");
-      const a=await testInImage(firstDir,image,`node_modules/.bin/vitest run ${files} --reporter=json --outputFile=${quote(join(firstDir,"first.json"))}`,out,"first-commit-tests",deadline);
+      const files=first.files.map(quote).join(" ");
+      const project=task.test_project?` --project ${quote(task.test_project)}`:"";
+      const a=await testInImage(firstDir,image,`node_modules/.bin/vitest run${project} ${files} --reporter=json --outputFile=${quote(join(firstDir,"first.json"))}`,out,"first-commit-tests",deadline);
       const finalCommitDir=join(scratch,"final-commit");await mkdir(finalCommitDir);
       const head=await execa("git",["-C",final,"archive","HEAD"],{encoding:"buffer"});
       await execa("tar",["-xf","-","-C",finalCommitDir],{input:head.stdout});
       await execa("ln",["-s","/opt/task/node_modules",join(finalCommitDir,"node_modules")]);
-      const b=await testInImage(finalCommitDir,image,`node_modules/.bin/vitest run ${files} --reporter=json --outputFile=${quote(join(finalCommitDir,"first-final.json"))}`,out,"first-commit-final-tests",deadline);
+      const b=await testInImage(finalCommitDir,image,`node_modules/.bin/vitest run${project} ${files} --reporter=json --outputFile=${quote(join(finalCommitDir,"first-final.json"))}`,out,"first-commit-final-tests",deadline);
       try {
         const red=JSON.parse(await readFile(join(firstDir,"first.json"),"utf8")) as TestReport;
         const green=JSON.parse(await readFile(join(finalCommitDir,"first-final.json"),"utf8")) as TestReport;
@@ -125,9 +121,10 @@ export async function collect(handle: SandboxHandle, task: Task, job: Job, stdou
   if(!events.completed||exitCode!==0) invalid.push("agent invocation incomplete or failed");
   if(job.variant==="C"&&!events.skillEvidence.length) invalid.push("C has no ub-mode loading event");
   if(job.variant==="A"&&skills.length) invalid.push("A loaded skills");
-  if([...trackedChanged,...untracked].some(f=>!f.startsWith("src/")&&!f.startsWith("test/")&&!['ACTION_LOG.md','WORK_LOG.md'].includes(f))) invalid.push("changed a forbidden path");
+  if(events.delegation.length) invalid.push("No-delegation protocol violated: spawned child agents");
+  if([...trackedChanged,...untracked].some(f=>!allowedPath(f,task.constraints.allowed_paths)||allowedPath(f,task.constraints.forbidden_paths))) invalid.push("changed a forbidden path");
   const metrics:Metrics={public_tests_passed:publicOk,hidden_tests_passed:hiddenOk,crap_max:crap?.max??null,crap_mean:crap?.mean??null,
-    dup_pairs_over_threshold:duplication,mutation_survivors:mutation,diff_lines:diffLines+extraLines,commits:commits.length,
+    dup_pairs_over_threshold:duplication,mutation_survivors:mutation,...lineMetrics,commits:commits.length,
     first_commit_is_failing_test:firstTest,wallclock_ms:wallclock,exit_code:exitCode};
   return {...job,status:events.completed?"completed":"invalid",valid:!invalid.length,invalid_reasons:invalid,metrics,
     null_reasons:reasons,skill_evidence:events.skillEvidence,available_skills:skills,base:handle.base,commit_sequence:sequence,

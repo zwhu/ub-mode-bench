@@ -6,6 +6,9 @@ export const MetricsSchema = z.object({
   dup_pairs_over_threshold: z.number().int().nonnegative().nullable(),
   mutation_survivors: z.number().int().nonnegative().nullable(),
   diff_lines: z.number().int().nonnegative(), commits: z.number().int().nonnegative(),
+  code_diff_lines: z.number().int().nonnegative().nullable().default(null),
+  test_diff_lines: z.number().int().nonnegative().nullable().default(null),
+  other_diff_lines: z.number().int().nonnegative().nullable().default(null),
   first_commit_is_failing_test: z.boolean().nullable(), wallclock_ms: z.number().nonnegative(),
   exit_code: z.number().int(),
 });
@@ -40,12 +43,16 @@ export function parseEvents(stream: string) {
     catch { /* diagnostic lines are retained in events.jsonl */ }
   }
   const evidence: string[] = [];
+  const delegation: string[] = [];
   for (const event of events) {
+    const collaboration = event.item as { type?: string; tool?: string; status?: string } | undefined;
+    if (event.type === "item.completed" && collaboration?.type === "collab_tool_call" &&
+      collaboration.tool === "spawn_agent" && collaboration.status === "completed") delegation.push(JSON.stringify(event));
     const item = event.item as { type?: string; command?: string; status?: string; aggregated_output?: string; command_actions?: { path?: string }[] } | undefined;
     if (item?.status === "completed" && item.aggregated_output?.includes("# ub-mode") &&
       (item.command?.includes("ub-mode/SKILL.md") || item.command_actions?.some(x => x.path?.endsWith("ub-mode/SKILL.md")))) evidence.push(JSON.stringify(event));
   }
-  return { completed: events.some(e => e.type === "turn.completed"), skillEvidence: evidence };
+  return { completed: events.some(e => e.type === "turn.completed"), skillEvidence: evidence, delegation };
 }
 export function parseCrap(edn: string) {
   if (!edn.includes(":entries")) throw new Error("missing CRAP entries");

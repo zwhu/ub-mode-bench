@@ -4,22 +4,22 @@ import { readFile, writeFile } from "node:fs/promises";
 import { execa } from "execa";
 import { join, resolve } from "node:path";
 import { matrix, MODELS } from "../runners/matrix.ts";
-import { completedResult, parseEvents, type Result } from "../runners/result.ts";
-import { METRICS } from "../score/aggregate.ts";
-import { cleanEnvironment, checkedDocker } from "../runners/process.ts";
+import { parseEvents } from "../runners/result.ts";
+import { METRICS, collectRows } from "../score/aggregate.ts";
+import { cleanEnvironment, checkedDocker, artifactRoot } from "../runners/process.ts";
 import { assertDependencyBaselines } from "../runners/reference.ts";
-import { loadTask } from "../runners/config.ts";
+import { loadTask, loadBenchConfig } from "../runners/config.ts";
 
 const phase=process.argv[2]??"smoke";
 assert(phase==="smoke"||phase==="formal","phase must be smoke or formal");
 const jobs=matrix(phase==="smoke"?["url-base-slashes"]:["url-base-slashes","defaults-safe-copy","path-network-root"],["A","C"],Object.keys(MODELS),phase==="smoke"?1:3);
-const root=resolve("runs",phase);
-const rows:Result[]=[];
+const root=join(artifactRoot,"runs",phase);
+const rows=await collectRows(root);
+assert.equal(rows.length,jobs.length,"unexpected or missing batch results");
 for(const job of jobs){
-  const out=join(root,job.id),r=await completedResult(join(out,"result.json"));
+  const out=join(root,job.id),r=rows.find(row=>row.id===job.id);
   assert(r,`missing or incomplete result: ${job.id}`);
   assert.equal(r.id,job.id);assert.equal(r.model,job.model);assert.equal(r.seed,job.seed);
-  rows.push(r);
   if(r.valid){
     assert.equal(r.status,"completed",`${job.id}: valid run must be completed`);
     assert.equal(r.available_skills.length,job.variant==="A"?0:1);
@@ -39,7 +39,7 @@ for(const job of jobs){
       assertDependencyBaselines(reference.copies,task.dependency_baselines);
     }else{
       assert.equal(job.task,"path-network-root",`${job.id}: missing reference preflight`);
-      const baseline=JSON.parse(await readFile("reports/overnight/pathe-reference-baseline.json","utf8"));
+      const baseline=JSON.parse(await readFile(join(artifactRoot,"reports/overnight/pathe-reference-baseline.json"),"utf8"));
       assert.equal(baseline.version,task.dependency_baselines.pathe);
       assert.equal(baseline.target_fix_present,false,"original UNC image contains target repair");
     }
@@ -66,15 +66,16 @@ for(const job of jobs){
 if(phase==="smoke"){
   const internal=JSON.parse(await checkedDocker(["network","inspect","ubm-internal"])) as {Internal:boolean}[];
   assert.equal(internal[0]?.Internal,true);
-  const auth=await execa("/home/huzhengwei/.local/bin/traex",["exec","-m","GPT-5.6-Luna","-c","model_reasoning_effort=xhigh","--json","--ephemeral","--skip-git-repo-check","Reply HOST_AUTH_OK. Do not use tools."],
+  const config=loadBenchConfig();const cli=config.agent.adapters[config.agent.default]?.cmd[0];assert(cli,"agent executable missing");
+  const auth=await execa(cli,["exec","-m","GPT-5.6-Luna","-c","model_reasoning_effort=xhigh","--json","--ephemeral","--skip-git-repo-check","Reply HOST_AUTH_OK. Do not use tools."],
     {env:cleanEnvironment(),extendEnv:false,stdin:"ignore",reject:false,timeout:180_000});
-  await writeFile("reports/overnight/smoke-host-after.jsonl",auth.stdout);
-  await writeFile("reports/overnight/smoke-host-after.stderr",auth.stderr);
+  await writeFile(join(artifactRoot,"reports/overnight/smoke-host-after.jsonl"),auth.stdout);
+  await writeFile(join(artifactRoot,"reports/overnight/smoke-host-after.stderr"),auth.stderr);
   assert.equal(auth.exitCode,0);assert(parseEvents(auth.stdout).completed&&auth.stdout.includes("HOST_AUTH_OK"));
 }
 const valid=rows.filter(r=>r.valid).length;
 if(phase==="formal"){
-  const report=JSON.parse(await readFile("reports/overnight/formal/aggregate.json","utf8")) as {
+  const report=JSON.parse(await readFile(join(artifactRoot,"reports/overnight/formal/aggregate.json"),"utf8")) as {
     total:number;valid:number;models:{model:string;metrics:Record<string,{A:{mean:number|null;n:number;values:{task:string;seed:number;value:number}[]};C:{mean:number|null;n:number;values:{task:string;seed:number;value:number}[]};delta:number|null}>}[];
   };
   assert.equal(report.total,54);assert.equal(report.valid,valid);
@@ -96,5 +97,5 @@ if(phase==="formal"){
   }
 }
 const status=valid>=jobs.length*.9?"PASS_CANDIDATE":"LIMITED";
-await writeFile(`reports/overnight/${phase}-acceptance.json`,JSON.stringify({phase,total:rows.length,valid,status,invalid:rows.filter(r=>!r.valid).map(r=>({id:r.id,reasons:r.invalid_reasons})),checked_at:new Date().toISOString()},null,2));
+await writeFile(join(artifactRoot,`reports/overnight/${phase}-acceptance.json`),JSON.stringify({phase,total:rows.length,valid,status,invalid:rows.filter(r=>!r.valid).map(r=>({id:r.id,reasons:r.invalid_reasons})),checked_at:new Date().toISOString()},null,2));
 console.log(`${phase}: ${status} ${valid}/${jobs.length}`);

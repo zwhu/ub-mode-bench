@@ -11,7 +11,7 @@ agent:
   default: trae
   adapters:
     trae:
-      cmd: ["/home/huzhengwei/.local/bin/traex", "exec"]
+      cmd: ["traecli", "exec"]
       skill_mount: /sandbox/.trae/skills
     claude:
       cmd: ["claude", "--no-stream"]

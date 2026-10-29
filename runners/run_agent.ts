@@ -65,6 +65,7 @@ export async function runAgent(handle: SandboxHandle, task: Task, job: Job, cfg:
   const prompt = [job.variant === "C" ? "/ub-mode" : "", await readFile(`tasks/${task.id}/prompt.md`, "utf8"),
     `Allowed code paths: ${task.constraints.allowed_paths.join(", ")}.`,
     `Run tests with: ${task.evaluation.public_tests.join(" && ")}.`,
+    `Executor budget: ${cfg.sandbox.cpus} CPUs, ${cfg.sandbox.memory_mb} MiB memory, ${cfg.run.task_timeout_sec} seconds total per run.`,
     "Work only in the task workspace. No delegation. No network access, external lookup, or pushes. No remotes are configured.",
     "The dependencies are preinstalled; do not change package or test runner configuration. Leave the completed work in the workspace.",
     job.variant === "C" ? "For explicit loading evidence, read the complete ub-mode SKILL.md with a file or shell read tool before changing code. The three quality tools are installed." : "",

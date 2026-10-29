@@ -6,7 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { execa } from "execa";
 import type { Task, BenchConfig } from "./schema.ts";
 import type { Job } from "./matrix.ts";
-import { checkedDocker, docker, quote } from "./process.ts";
+import { checkedDocker, docker, quote, resolveExecutable } from "./process.ts";
 import { assertDependencyBaselines, dependencyProbeCode } from "./reference.ts";
 
 export interface SandboxHandle {
@@ -15,6 +15,9 @@ export interface SandboxHandle {
 }
 export async function startSandbox(task: Task, job: Job, cfg: BenchConfig, runDir: string): Promise<SandboxHandle> {
   if (!task.image) throw new Error("task image missing");
+  const cli = cfg.agent.adapters[cfg.agent.default]?.cmd[0];
+  if (!cli) throw new Error("agent executable missing");
+  const executable = await resolveExecutable(process.env.BENCH_EXECUTOR_BIN ?? cli);
   const workdir = await mkdtemp(join(tmpdir(), "ubm-run-"));
   await execa("bash", [`tasks/${task.id}/setup.sh`, workdir]);
   const home = resolve(runDir, "home");
@@ -36,7 +39,7 @@ export async function startSandbox(task: Task, job: Job, cfg: BenchConfig, runDi
     "-e", "TRAE_HOME=/tmp/executor-home", "-e", "TRAECLI_HOME=/tmp/executor-home/cli",
     `--pids-limit=${cfg.sandbox.pids}`, "--cap-drop=ALL", "--security-opt=no-new-privileges",
     "--tmpfs=/tmp:rw,size=2048m", "-v", `${workdir}:${workdir}:rw`,
-    "-v", `${resolve(homedir(), ".local/bin/traex")}:/usr/local/bin/traecli:ro`, ...skillMount, image,
+    "-v", `${executable}:/usr/local/bin/traecli:ro`, ...skillMount, image,
     "sh", "-c", "mkdir -p /tmp/executor-home/cli && exec traecli exec-server --listen ws://0.0.0.0:4300"]);
   try {
     const ip = await checkedDocker(["inspect", containerId, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"]);
@@ -53,7 +56,8 @@ export async function startSandbox(task: Task, job: Job, cfg: BenchConfig, runDi
     if(!ready)throw new Error("exec-server not reachable after 30 readiness probes");
     const probe=await docker(["exec",containerId,"timeout","5","bash","-c","echo >/dev/tcp/1.1.1.1/443"],8000);
     await writeFile(resolve(runDir,"network.json"),JSON.stringify({internal:true,ip,probe_exit:probe.exitCode,
-      mounts:JSON.parse(await checkedDocker(["inspect",containerId,"--format","{{json .Mounts}}"])),auth_mounted:false},null,2));
+      mounts:JSON.parse(await checkedDocker(["inspect",containerId,"--format","{{json .Mounts}}"])),auth_mounted:false,
+      image,image_id:await checkedDocker(["inspect",containerId,"--format","{{.Image}}"] )},null,2));
     if(probe.exitCode===0)throw new Error("NETWORK_ISOLATION_BLOCKED: outbound TCP succeeded");
     if(task.dependency_baselines){
       const copies=JSON.parse(await checkedDocker(["exec",containerId,"node","-e",dependencyProbeCode,JSON.stringify(Object.keys(task.dependency_baselines))]));

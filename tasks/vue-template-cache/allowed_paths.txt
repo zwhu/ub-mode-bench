@@ -1,0 +1,4 @@
+packages/compiler-sfc/src/**
+packages/compiler-sfc/__tests__/**
+ACTION_LOG.md
+WORK_LOG.md

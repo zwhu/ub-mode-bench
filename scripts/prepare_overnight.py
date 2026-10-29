@@ -86,7 +86,7 @@ tar -xzf "$task_dir/base.tar.gz" -C "$target"
             "id": task_id, "category": "bug_fix", "language": "ts", "difficulty": "easy",
             "upstream": {"repo_hash": hashed(f"unjs/{name}"), "base_sha_hash": hashed(base),
                          "pr_url_encrypted": "enc:local-gold-only", "license": "MIT"},
-            "constraints": {"allowed_paths": ["src/**", "test/**"], "forbidden_paths": [],
+            "constraints": {"allowed_paths": ["src/**", "test/**", "ACTION_LOG.md", "WORK_LOG.md"], "forbidden_paths": [],
                             "time_budget_sec": 1800, "token_budget": 1000000, "network": "none"},
             "evaluation": {"public_tests": ["node_modules/.bin/vitest run"],
                            "hidden_tests_ref": f"gold://{task_id}/hidden_tests",

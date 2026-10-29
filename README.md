@@ -57,6 +57,39 @@ pnpm bench:run
 pnpm report --run formal   # reports/overnight/formal/aggregate.json and raw.csv
 ```
 
+Changed lines are additions plus deletions from the task base to the final
+workspace, including committed, uncommitted and new files. Reports split
+`diff_lines` into `code_diff_lines` (`src/` including package source directories),
+`test_diff_lines` (`test/`, `tests/`, `__tests__/`, including test helpers), and
+`other_diff_lines` (such as action logs). Historical results
+are split from retained workspaces without changing their original result files;
+if a workspace is unavailable, the split metrics remain null.
+
+The approved larger Vue task is `vue-template-cache` (Vue core PR #15136).
+It runs in its own namespaces, preserving the earlier small-task results:
+
+```bash
+pnpm task:validate vue-template-cache
+pnpm exec tsx runners/cli.ts run --tasks vue-template-cache --models GPT-6.1-Sol --seeds 1 --phase vue-calibration
+pnpm exec tsx scripts/report_vue.ts vue-calibration
+pnpm exec tsx runners/cli.ts run --tasks vue-template-cache --seeds 3 --phase vue-formal
+pnpm exec tsx scripts/report_vue.ts vue-formal
+```
+
+The CLI executable is resolved through `PATH` using the configured adapter
+command. Run results and private audit records can be kept outside the checkout
+by setting `BENCH_ARTIFACTS_DIR` to an absolute directory before running these
+commands. That directory contains `runs/` and the detailed `reports/` evidence;
+the Markdown summaries remain in this checkout's `reports/` directory.
+Evaluation and reporting are local commands and contain no messaging integration.
+If the configured host command is a shell wrapper, set `BENCH_EXECUTOR_BIN` to
+the standalone CLI binary that provides `exec-server` inside the container.
+
+Its public fixture changes the test alias resolver to use the current working
+directory so mutation workers test their private source copies. Production
+source remains at the official pre-fix commit. Published Vue compiler packages
+must be absent from the dependency image; hidden regression tests remain in gold.
+
 ## Status
 
 The active execution plan, acceptance criteria and stop conditions are in

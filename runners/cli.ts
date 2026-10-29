@@ -11,6 +11,7 @@ import { runAgent, hostAuth } from "./run_agent.ts";
 import { collect } from "./collect.ts";
 import { completedResult, ResultSchema } from "./result.ts";
 import { appendFile } from "node:fs/promises";
+import { isTaskDeadline, artifactRoot } from "./process.ts";
 
 const program = new Command();
 program.name("ub-mode-bench").command("run")
@@ -27,7 +28,8 @@ program.name("ub-mode-bench").command("run")
     if(!/^[a-z0-9-]+$/.test(opts.phase))throw new Error("invalid phase");
     const jobs=matrix(opts.tasks.split(","),opts.variants.split(","),opts.models.split(","),opts.seeds??cfg.run.default_seeds);
     if(opts.dryRun){for(const job of jobs)console.log(JSON.stringify(job));console.log(`total=${jobs.length}`);return;}
-    const root=resolve("runs",opts.phase);await mkdir(root,{recursive:true});
+    const root=join(artifactRoot,"runs",opts.phase);await mkdir(root,{recursive:true});
+    const progress=join(artifactRoot,"reports/overnight/PROGRESS.md");await mkdir(join(artifactRoot,"reports/overnight"),{recursive:true});
     let done=0,valid=0,failures=0,stop:string|null=null;
     const cli=cfg.agent.adapters[cfg.agent.default]?.cmd[0];if(!cli)throw new Error("missing CLI");
     // Refresh is serialized on the host before spawning any executor.
@@ -38,8 +40,8 @@ program.name("ub-mode-bench").command("run")
       const previous=await completedResult(join(out,"result.json"));
       if(previous){console.log(`[skip] ${job.id}`);done++;if(previous.valid)valid++;return;}
       if(stop) return;
-      const disk=await statfs("/data00");
-      if(disk.bavail*disk.bsize<30*1024**3){stop="/data00 free space below 30G";return;}
+      const disk=await statfs(root);
+      if(disk.bavail*disk.bsize<30*1024**3){stop="artifact filesystem free space below 30G";return;}
       await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
       console.log(`[start] ${job.id}`);
       let lastError="",attempts=0;
@@ -48,26 +50,30 @@ program.name("ub-mode-bench").command("run")
         attempts=attempt;
         if(attempt>1){await rename(out,`${out}-infra-attempt-1`);await mkdir(out,{recursive:true});}
         let handle:Awaited<ReturnType<typeof startSandbox>>|undefined;
+        let taskStarted:number|undefined;
         try {
           // Check expires_at on every run. The host is the single refresh owner.
           await hostAuth(cli,out);
           const task=loadTask(`tasks/${job.task}/task.yaml`);
-          const t=performance.now();handle=await startSandbox(task,job,cfg,out);
+          await writeFile(join(out,"task-snapshot.json"),JSON.stringify(task,null,2));
+          await writeFile(join(out,"config-snapshot.json"),JSON.stringify(cfg,null,2));
+          const t=performance.now();taskStarted=t;handle=await startSandbox(task,job,cfg,out);
           const agent=await runAgent(handle,task,job,cfg,out,Math.max(1,cfg.run.task_timeout_sec*1000-(performance.now()-t)));
           if(agent.exitCode!==0||!agent.stdout.includes('"type":"turn.completed"'))throw new Error("agent infrastructure invocation failed");
           const result=ResultSchema.parse(await collect(handle,task,job,agent.stdout,agent.exitCode,performance.now()-t,out,attempt));
           await writeFile(join(out,"result.tmp"),JSON.stringify(result,null,2));await rename(join(out,"result.tmp"),join(out,"result.json"));
           failures=0;done++;if(result.valid)valid++;console.log(`[done] ${job.id} valid=${result.valid} hidden=${result.metrics.hidden_tests_passed}`);
-          if(done%6===0){await appendFile("reports/overnight/PROGRESS.md",`[${new Date().toISOString()}] ${opts.phase==="smoke"?"S4":"S5"} | IN_PROGRESS | ${done}/${jobs.length} runs have complete results | ${root}\n`);
+          if(done%6===0){await appendFile(progress,`[${new Date().toISOString()}] ${opts.phase==="smoke"?"S4":"S5"} | IN_PROGRESS | ${done}/${jobs.length} runs have complete results | runs/${opts.phase}\n`);
             const {readFile}=await import("node:fs/promises");const s=await readFile("HANDOFF.md","utf8");
             await writeFile("HANDOFF.md",s.replace(/- 运行进度：.*\n/g,"").replace("## 2. 当前状态\n",`## 2. 当前状态\n\n- 运行进度：${opts.phase} ${done}/${jobs.length}，UTC ${new Date().toISOString()}。\n`));}
           return;
         }catch(e){
-          lastError=String(e);await writeFile(join(out,"infrastructure-error.txt"),lastError);failures++;
+          const deadline=isTaskDeadline(e,taskStarted===undefined?0:performance.now()-taskStarted,cfg.run.task_timeout_sec*1000);
+          lastError=String(e);await writeFile(join(out,"infrastructure-error.txt"),lastError);if(!deadline)failures++;
           if(lastError.includes("HOST_AUTH_BLOCKED")||lastError.includes("ISOLATION_BLOCKED")||failures>=3){stop=lastError;break;}
           // A task deadline is a terminal invalid sample; only infrastructure
           // failures receive the single retry.
-          if(typeof e==="object"&&e!==null&&"timedOut" in e&&e.timedOut===true)break;
+          if(deadline)break;
         }finally{await handle?.destroy();}
       }
       const empty={public_tests_passed:null,hidden_tests_passed:null,crap_max:null,crap_mean:null,dup_pairs_over_threshold:null,mutation_survivors:null,

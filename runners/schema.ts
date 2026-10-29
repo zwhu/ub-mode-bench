@@ -39,7 +39,8 @@ export const TaskSchema = z.object({
   image: z.string().optional(),
   hidden_command: z.string().optional(),
   coverage_command: z.string().optional(),
-  dependency_baselines: z.record(z.string().regex(/^[a-z0-9][a-z0-9._-]*$/), z.string()).optional(),
+  test_project: z.string().optional(),
+  dependency_baselines: z.record(z.string().regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/), z.string()).optional(),
 });
 export type Task = z.infer<typeof TaskSchema>;
 

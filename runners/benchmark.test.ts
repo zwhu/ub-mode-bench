@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm, symlink, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, symlink, mkdir, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { matrix, MODELS } from "./matrix.ts";
@@ -8,9 +8,28 @@ import { completedResult, parseEvents, parseCrap, parseDry, parseMutation, parse
 import { aggregate } from "../score/aggregate.ts";
 import { auditLinks } from "./collect.ts";
 import { assertDependencyBaselines } from "./reference.ts";
+import { isTaskDeadline, resolveExecutable } from "./process.ts";
+
+test("agent executable resolves through PATH and handles a literal path with spaces", async()=>{
+  assert.equal(await resolveExecutable("node"),await realpath(process.execPath));
+  const dir=await mkdtemp(join(tmpdir(),"ubm-cli-path-"));
+  try{
+    const path=join(dir,"agent with spaces");await symlink(process.execPath,path);
+    assert.equal(await resolveExecutable(path),await realpath(process.execPath));
+    await assert.rejects(resolveExecutable("node; printf injected"));
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test("task budget exhaustion is distinct from a short infrastructure subprocess timeout", () => {
+  const timeout = { timedOut: true };
+  assert(isTaskDeadline(timeout, 1800001, 1800000));
+  assert(!isTaskDeadline(timeout, 30000, 1800000));
+  assert(!isTaskDeadline(new Error("API failed"), 1800001, 1800000));
+  assert(!isTaskDeadline({timedOut:false}, 1800001, 1800000));
+});
 
 const metric={public_tests_passed:true,hidden_tests_passed:true,crap_max:5,crap_mean:3,dup_pairs_over_threshold:0,mutation_survivors:null,
-  diff_lines:10,commits:2,first_commit_is_failing_test:true,wallclock_ms:1000,exit_code:0};
+  diff_lines:10,code_diff_lines:4,test_diff_lines:6,other_diff_lines:0,commits:2,first_commit_is_failing_test:true,wallclock_ms:1000,exit_code:0};
 function row(model:string,variant:"A"|"C",value:number|null):Result{return {id:`${model}-${variant}`,model,variant,task:"task",seed:1,status:"completed",valid:true,
   metrics:{...metric,crap_max:value},null_reasons:{mutation_survivors:"timeout"},invalid_reasons:[],skill_evidence:[],available_skills:[],base:"base",commit_sequence:[],finished_at:"now",attempts:1};}
 test("matrix has every task-model-variant-seed combination and stable unique IDs",()=>{
@@ -26,6 +45,12 @@ test("event parser requires successful actual skill-body read, not a final claim
   const parsed=parseEvents(claim+"\nnot-json\n"+JSON.stringify(event)+'\n{"type":"turn.completed"}');
   assert(parsed.completed);assert.equal(parsed.skillEvidence.length,1);
   assert.equal(parseEvents(JSON.stringify({...event,item:{...event.item,status:"failed"}})).skillEvidence.length,0);
+});
+test("actual child creation violates no-delegation even when its prompt says no-op",()=>{
+  const event={type:"item.completed",item:{type:"collab_tool_call",tool:"spawn_agent",status:"completed",prompt:"Do not work; no-op."}};
+  assert.equal(parseEvents(JSON.stringify(event)).delegation.length,1);
+  assert.equal(parseEvents(JSON.stringify({...event,item:{...event.item,status:"failed"}})).delegation.length,0);
+  assert.equal(parseEvents(JSON.stringify({...event,item:{...event.item,tool:"close_agent"}})).delegation.length,0);
 });
 test("native skill aliases resolve to exact absolute config paths",()=>{
   assert.deepEqual(resolveSkillPaths('- `r0` = `/native/skills`\n- ponytail: text (file: r0/ponytail/SKILL.md)\n- ub-mode: text (file: /clean/skills/ub-mode/SKILL.md)'),
@@ -61,7 +86,7 @@ test("evaluator rejects a task symlink before reading or overlaying host files",
   const dir=await mkdtemp(join(tmpdir(),"ubm-link-test-"));
   try{
     await symlink("/opt/task/node_modules",join(dir,"node_modules"));await auditLinks(dir);
-    await mkdir(join(dir,"test"));await symlink("/home/host-private",join(dir,"test","escape"));
+    await mkdir(join(dir,"test"));await symlink("/private/host-data",join(dir,"test","escape"));
     await assert.rejects(auditLinks(dir),/WORKSPACE_ISOLATION_BLOCKED/);
     await rm(join(dir,"test","escape"));await rm(join(dir,"node_modules"));await mkdir(join(dir,"node_modules"));
     await assert.rejects(auditLinks(dir),/dependency entry changed/);
